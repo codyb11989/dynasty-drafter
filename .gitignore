@@ -427,3 +427,15 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# ---- Vite / Node (dynasty-drafter) ----
+dist/
+.vite/
+*.local
+*.tsbuildinfo
+.claude/settings.local.json
+# Local env (MFL creds etc., if ever needed)
+.env
+.env.local
+# Raw MFL responses cached by the sync script (the normalized data/ files are committed)
+scripts/.cache/
