@@ -1,12 +1,22 @@
-import { useAppData } from "../App";
+import { useAppData, useSync } from "../App";
 import { useDraftStore } from "../store/draftStore";
 import { DEFAULT_SETTINGS } from "../lib/value";
 
 export default function Settings() {
   const { league, meta } = useAppData();
+  const { refresh, status, error: syncError } = useSync();
   const { myFranchiseId, setMyTeam, modelWeight, needWeight, setWeights, resetDraft, draftedBy } =
     useDraftStore();
   const draftedCount = Object.keys(draftedBy).length;
+  const syncing = status === "syncing";
+  const syncMsg =
+    status === "updated"
+      ? "Pulled fresh data ✓"
+      : status === "current"
+      ? "Already up to date ✓"
+      : status === "error"
+      ? syncError ?? "Sync failed."
+      : null;
 
   return (
     <div>
@@ -99,9 +109,20 @@ export default function Settings() {
             <dt>Last synced</dt>
             <dd>{new Date(meta.syncedAt).toLocaleString()}</dd>
           </dl>
+          <div className="row" style={{ gap: 10, alignItems: "center", marginTop: 12 }}>
+            <button className="btn sm" onClick={refresh} disabled={syncing}>
+              {syncing ? "Syncing…" : "↻ Sync now"}
+            </button>
+            {syncMsg && (
+              <span className="faint" style={{ fontSize: 12, color: status === "error" ? "#ff9b95" : undefined }}>
+                {syncMsg}
+              </span>
+            )}
+          </div>
           <p className="faint" style={{ fontSize: 12, marginTop: 10 }}>
-            Refresh league data anytime you have internet by running <code>npm run sync</code>, then
-            reload. The app itself works fully offline during the draft.
+            <strong>Sync now</strong> re-pulls the latest league data from the network (whenever you're
+            online) without reloading. The newest stats land here after <code>npm run sync</code> is run
+            and deployed — the app itself works fully offline during the draft.
           </p>
         </div>
 
