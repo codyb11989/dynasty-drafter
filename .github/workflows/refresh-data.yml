@@ -1,0 +1,20 @@
+# A friendly, clearly-labeled manual trigger for a league-data refresh — easy to
+# spot and tap in the GitHub mobile app / mobile web (Repo → Actions → "Refresh
+# data" → Run workflow). It just reuses the deploy pipeline, which runs
+# `npm run sync` (live MFL + FantasyCalc pull) before building, so there's no
+# duplicated logic to keep in step with deploy.yml.
+name: 🔄 Refresh data (sync + redeploy)
+run-name: Refresh league data 🔄 (by @${{ github.actor }})
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  refresh:
+    # Reuse the full sync → build → deploy-to-Pages pipeline.
+    uses: ./.github/workflows/deploy.yml
+    # Pages deployment needs these granted to the calling job.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
