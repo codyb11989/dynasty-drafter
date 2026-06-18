@@ -488,6 +488,10 @@ h3 {
     min-width: 0 !important;
     width: 100%;
   }
+
+  .vbar {
+    min-width: 28px;
+  }
 }
 
 .suggest {
