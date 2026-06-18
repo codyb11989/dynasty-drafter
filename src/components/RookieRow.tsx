@@ -136,7 +136,7 @@ function RookieDetail({ rookie, scoring }: { rookie: RankedRookie; scoring: Scor
 
   return (
     <div className="row wrap" style={{ alignItems: "flex-start", gap: 24, padding: "6px 4px 10px" }}>
-      <div style={{ minWidth: 240 }}>
+      <div className="detail-breakdown">
         <div className="faint detail-h">How {rookie.proj.toFixed(0)} pts are scored</div>
         {breakdown.length === 0 ? (
           <div className="muted" style={{ fontSize: 13 }}>Flat projection (no statline) — e.g. kicker.</div>
@@ -156,7 +156,7 @@ function RookieDetail({ rookie, scoring }: { rookie: RankedRookie; scoring: Scor
       </div>
 
       {stats.length > 0 && (
-        <div style={{ minWidth: 280, flex: 1 }}>
+        <div className="detail-stats">
           <div className="row spread" style={{ marginBottom: 6 }}>
             <span className="faint detail-h" style={{ marginBottom: 0 }}>Tune projected stats</span>
             {hasOverride && (
