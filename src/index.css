@@ -390,6 +390,25 @@ h3 {
   }
   .sticky-side {
     position: static;
+    order: -1;
+  }
+}
+
+@media (max-width: 600px) {
+  .content {
+    padding: 14px 12px 60px;
+  }
+  .page-head h1 {
+    font-size: 20px;
+  }
+  .brand small {
+    display: none;
+  }
+  .sync-pill {
+    display: none;
+  }
+  .hide-mobile {
+    display: none;
   }
 }
 

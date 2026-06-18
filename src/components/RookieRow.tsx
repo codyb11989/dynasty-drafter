@@ -44,10 +44,10 @@ export default function RookieRow({
           </div>
         </td>
         <td className="num val">{rookie.proj.toFixed(0)}</td>
-        <td className="num muted">
+        <td className="num muted hide-mobile">
           {rookie.vor > 0 ? `+${rookie.vor.toFixed(0)}` : rookie.vor.toFixed(0)}
         </td>
-        <td className="num muted">{rookie.adp != null ? rookie.adp.toFixed(1) : "—"}</td>
+        <td className="num muted hide-mobile">{rookie.adp != null ? rookie.adp.toFixed(1) : "—"}</td>
         <td>
           <div className="vbar" title={`value ${rookie.value.toFixed(0)}`}>
             <span style={{ width: `${rookie.value}%` }} />

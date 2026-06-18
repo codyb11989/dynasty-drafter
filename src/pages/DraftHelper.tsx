@@ -80,8 +80,8 @@ export default function DraftHelper() {
                   <th className="rank">#</th>
                   <th>Player</th>
                   <th className="num">Proj</th>
-                  <th className="num">VOR</th>
-                  <th className="num">ADP</th>
+                  <th className="num hide-mobile">VOR</th>
+                  <th className="num hide-mobile">ADP</th>
                   <th>Value</th>
                   <th className="num"></th>
                 </tr>
