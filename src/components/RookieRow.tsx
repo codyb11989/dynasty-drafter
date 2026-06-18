@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAppData } from "../App";
 import { useDraftStore, OTHER } from "../store/draftStore";
 import { pointsBreakdown, GROUP_STATS, STAT_LABEL } from "../lib/scoring";
-import { displayName, fmtPick, franchiseName } from "../lib/format";
+import { aiSearchUrl, displayName, fmtPick, franchiseName, playerSearchQuery } from "../lib/format";
 import type { RankedRookie } from "../lib/value";
 import type { Scoring, StatKey, StatLine } from "../types";
 import PositionBadge from "./PositionBadge";
@@ -31,9 +31,21 @@ export default function RookieRow({
           <div className="row" style={{ gap: 9 }}>
             <PositionBadge group={rookie.group} pos={rookie.pos} />
             <div className="stack" style={{ gap: 1 }}>
-              <span className="pname" style={{ cursor: "pointer" }} onClick={onToggle}>
-                {displayName(rookie.name)}
-                {overrides[rookie.id] && <span className="tag gold" style={{ marginLeft: 6 }}>edited</span>}
+              <span className="row" style={{ gap: 6 }}>
+                <span className="pname" style={{ cursor: "pointer" }} onClick={onToggle}>
+                  {displayName(rookie.name)}
+                  {overrides[rookie.id] && <span className="tag gold" style={{ marginLeft: 6 }}>edited</span>}
+                </span>
+                <a
+                  className="ai-link"
+                  href={aiSearchUrl(playerSearchQuery(rookie))}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  title={`Quick AI search: ${displayName(rookie.name)}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  ✨
+                </a>
               </span>
               <span className="pmeta">
                 {rookie.team} · {fmtPick(rookie.draftRound, rookie.draftPick)}

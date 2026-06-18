@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import { loadAllData, type AppData } from "./lib/data";
 import { timeAgo } from "./lib/format";
@@ -15,13 +15,65 @@ export const useAppData = () => {
   return d;
 };
 
+export type SyncStatus = "idle" | "syncing" | "updated" | "current" | "error";
+
+export interface SyncControl {
+  /** Re-fetch league data fresh from the network (manual sync). */
+  refresh: () => void;
+  status: SyncStatus;
+  error: string | null;
+}
+
+const SyncCtx = createContext<SyncControl | null>(null);
+export const useSync = () => {
+  const s = useContext(SyncCtx);
+  if (!s) throw new Error("useSync must be used within App");
+  return s;
+};
+
 export default function App() {
   const [data, setData] = useState<AppData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<SyncStatus>("idle");
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const resetTimer = useRef<ReturnType<typeof setTimeout>>();
+  const inFlight = useRef(false);
+  const syncedAtRef = useRef<string | null>(null);
 
   useEffect(() => {
     loadAllData().then(setData).catch((e) => setError(String(e)));
   }, []);
+
+  // Track the loaded data's sync time so a manual refresh can tell "updated" from
+  // "already current" without reading state inside a (StrictMode-doubled) updater.
+  useEffect(() => {
+    syncedAtRef.current = data?.meta.syncedAt ?? null;
+  }, [data]);
+
+  const refresh = useCallback(() => {
+    if (inFlight.current) return; // ignore re-clicks while a sync is running
+    inFlight.current = true;
+    clearTimeout(resetTimer.current);
+    setSyncError(null);
+    setStatus("syncing");
+    loadAllData({ bust: true })
+      .then((next) => {
+        const changed = syncedAtRef.current !== next.meta.syncedAt;
+        setData(next);
+        setStatus(changed ? "updated" : "current");
+        resetTimer.current = setTimeout(() => setStatus("idle"), 3000);
+      })
+      .catch((e) => {
+        setSyncError(String(e));
+        setStatus("error");
+        resetTimer.current = setTimeout(() => setStatus("idle"), 5000);
+      })
+      .finally(() => {
+        inFlight.current = false;
+      });
+  }, []);
+
+  useEffect(() => () => clearTimeout(resetTimer.current), []);
 
   if (error) {
     return (
@@ -49,49 +101,90 @@ export default function App() {
 
   return (
     <DataCtx.Provider value={data}>
-      <div className="app">
-        <header className="topbar">
-          <div className="topbar-inner">
-            <div className="brand">
-              <span className="logo">🐃</span>
-              <span>
-                Water Buffaloes
-                <small>{data.league.name}</small>
-              </span>
+      <SyncCtx.Provider value={{ refresh, status, error: syncError }}>
+        <div className="app">
+          <header className="topbar">
+            <div className="topbar-inner">
+              <div className="brand">
+                <span className="logo">🐃</span>
+                <span>
+                  Water Buffaloes
+                  <small>{data.league.name}</small>
+                </span>
+              </div>
+              <nav className="nav">
+                <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
+                  Draft Helper
+                </NavLink>
+                <NavLink to="/players" className={({ isActive }) => (isActive ? "active" : "")}>
+                  Rookie Board
+                </NavLink>
+                <NavLink to="/rosters" className={({ isActive }) => (isActive ? "active" : "")}>
+                  Rosters
+                </NavLink>
+                <NavLink to="/rules" className={({ isActive }) => (isActive ? "active" : "")}>
+                  Rules & Scoring
+                </NavLink>
+                <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
+                  Settings
+                </NavLink>
+              </nav>
+              <div className="topbar-spacer" />
+              <SyncPill syncedAt={data.meta.syncedAt} status={status} error={syncError} onSync={refresh} />
             </div>
-            <nav className="nav">
-              <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
-                Draft Helper
-              </NavLink>
-              <NavLink to="/players" className={({ isActive }) => (isActive ? "active" : "")}>
-                Rookie Board
-              </NavLink>
-              <NavLink to="/rosters" className={({ isActive }) => (isActive ? "active" : "")}>
-                Rosters
-              </NavLink>
-              <NavLink to="/rules" className={({ isActive }) => (isActive ? "active" : "")}>
-                Rules & Scoring
-              </NavLink>
-              <NavLink to="/settings" className={({ isActive }) => (isActive ? "active" : "")}>
-                Settings
-              </NavLink>
-            </nav>
-            <div className="topbar-spacer" />
-            <span className="sync-pill" title={new Date(data.meta.syncedAt).toLocaleString()}>
-              synced {timeAgo(data.meta.syncedAt)}
-            </span>
-          </div>
-        </header>
-        <main className="content">
-          <Routes>
-            <Route path="/" element={<DraftHelper />} />
-            <Route path="/players" element={<Players />} />
-            <Route path="/rosters" element={<Rosters />} />
-            <Route path="/rules" element={<RulesScoring />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </main>
-      </div>
+          </header>
+          <main className="content">
+            <Routes>
+              <Route path="/" element={<DraftHelper />} />
+              <Route path="/players" element={<Players />} />
+              <Route path="/rosters" element={<Rosters />} />
+              <Route path="/rules" element={<RulesScoring />} />
+              <Route path="/settings" element={<Settings />} />
+            </Routes>
+          </main>
+        </div>
+      </SyncCtx.Provider>
     </DataCtx.Provider>
+  );
+}
+
+function SyncPill({
+  syncedAt,
+  status,
+  error,
+  onSync,
+}: {
+  syncedAt: string;
+  status: SyncStatus;
+  error: string | null;
+  onSync: () => void;
+}) {
+  const label =
+    status === "syncing"
+      ? "syncing…"
+      : status === "updated"
+      ? "updated ✓"
+      : status === "current"
+      ? "up to date ✓"
+      : status === "error"
+      ? "sync failed"
+      : `synced ${timeAgo(syncedAt)}`;
+  const title =
+    status === "error" && error
+      ? error
+      : `Data synced ${new Date(syncedAt).toLocaleString()} · click to check for updates`;
+
+  return (
+    <button
+      className={`sync-pill${status === "error" ? " err" : ""}`}
+      onClick={onSync}
+      disabled={status === "syncing"}
+      title={title}
+    >
+      <span className={`sync-ico${status === "syncing" ? " spin" : ""}`} aria-hidden>
+        ↻
+      </span>
+      {label}
+    </button>
   );
 }

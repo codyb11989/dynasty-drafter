@@ -128,12 +128,40 @@ h3 {
   flex: 1;
 }
 .sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 11px;
   color: var(--text-faint);
+  background: transparent;
   border: 1px solid var(--border);
   padding: 4px 9px;
   border-radius: 999px;
   white-space: nowrap;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.sync-pill:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+.sync-pill:disabled {
+  cursor: default;
+  background: transparent;
+}
+.sync-pill.err {
+  color: #ff9b95;
+  border-color: #5a2a2a;
+}
+.sync-ico {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
+}
+.sync-ico.spin {
+  animation: spin 0.8s linear infinite;
 }
 
 .content {
@@ -340,6 +368,19 @@ h3 {
 }
 .pname {
   font-weight: 700;
+}
+.ai-link {
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.5;
+  text-decoration: none;
+  filter: grayscale(0.4);
+  transition: opacity 0.12s, filter 0.12s, transform 0.12s;
+}
+.ai-link:hover {
+  opacity: 1;
+  filter: none;
+  transform: scale(1.15);
 }
 .pmeta {
   color: var(--text-faint);

@@ -30,6 +30,21 @@ export function fmtPick(round: number | null, pick: number | null): string {
   return pick ? `R${round}.${String(pick).padStart(2, "0")}` : `R${round}`;
 }
 
+/**
+ * Google AI Mode (Gemini-powered) search URL for a quick player lookup.
+ * `udm=50` opens Google's AI Mode; falls back to normal results if unavailable.
+ */
+export function aiSearchUrl(query: string): string {
+  return `https://www.google.com/search?udm=50&q=${encodeURIComponent(query)}`;
+}
+
+/** A fantasy-context AI search query for a rookie ("First Last TEAM POS NFL …"). */
+export function playerSearchQuery(opts: { name: string; team: string; pos: string }): string {
+  const who = displayName(opts.name);
+  const team = opts.team && opts.team !== "FA" ? ` ${opts.team}` : "";
+  return `${who}${team} ${opts.pos} NFL 2026 rookie fantasy dynasty outlook`;
+}
+
 export function timeAgo(iso: string): string {
   const then = new Date(iso).getTime();
   const mins = Math.round((Date.now() - then) / 60000);
