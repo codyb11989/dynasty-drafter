@@ -192,9 +192,16 @@ async function main() {
 
   console.log(`  franchises: ${league.franchiseCount}, players: ${Object.keys(playerMap).length}, rookies: ${rookieIds.length}`);
 
-  // Fetch draft capital for rookies (DETAILS=1, batched) and ADP.
-  const details = await fetchRookieDetails(rookieIds);
-  const adp = normalizeAdp(normalizeAdpSource(await fetchAdp()));
+  // Fetch draft capital for rookies (DETAILS=1, batched), MFL ADP, and FantasyCalc values.
+  const [details, adp, fcRaw] = await Promise.all([
+    fetchRookieDetails(rookieIds),
+    normalizeAdp(normalizeAdpSource(await fetchAdp())),
+    fetchFantasyCalcValues(),
+  ]);
+
+  const fcByName = buildFcValueMap(fcRaw);
+  // Normalize FC values against the best match in our actual rookie pool (offset-safe).
+  // We compute this after matching so only rookies we care about affect the ceiling.
 
   // Build the projected rookie pool.
   const rookiePool = rookieIds
@@ -207,7 +214,7 @@ async function main() {
         draft_pick: d.draft_pick,
       });
       const a = adp[id];
-      return {
+      const entry = {
         id,
         name: base.name,
         pos: base.pos,
@@ -222,10 +229,26 @@ async function main() {
         projPointsOverride: proj.projPointsOverride ?? null,
         adp: a ? a.avgPick : null,
         adpRank: a ? a.rank : null,
+        fcValue: null, // filled below
       };
+      return entry;
     })
     // Drop pure non-fantasy noise (e.g. long snappers slipping through)
     .filter((r) => r.group);
+
+  // Normalize FC values: find the max raw FC value among position-valid matches in our pool.
+  let maxFcValue = 0;
+  for (const r of rookiePool) {
+    if (!FC_TO_GROUP[r.group]) continue; // skip IDP — FC doesn't cover them
+    const match = fcByName.get(mflToFirstLast(r.name));
+    if (match && FC_TO_GROUP[match.fcPos] === r.group && match.value > maxFcValue) {
+      maxFcValue = match.value;
+    }
+  }
+  for (const r of rookiePool) r.fcValue = getFcValue(r, fcByName, maxFcValue);
+
+  const fcCount = rookiePool.filter((r) => r.fcValue != null).length;
+  console.log(`  FantasyCalc: matched ${fcCount}/${rookiePool.length} rookies (max raw value ${maxFcValue})`);
 
   // Write everything.
   await Promise.all([
@@ -266,6 +289,78 @@ async function fetchAdp() {
 }
 function normalizeAdpSource(d) {
   return d; // already in {adp:{player:[...]}} shape
+}
+
+// ---- FantasyCalc dynasty values (secondary market signal) ------------------
+
+async function fetchFantasyCalcValues() {
+  const url =
+    "https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=1&ppr=0.5&numTeams=12&idpWR=1.5&idpRB=1&idpTE=0.5";
+  const cacheFile = join(CACHE_DIR, "fantasycalc.json");
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    await writeFile(cacheFile, JSON.stringify(data));
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn(`  ! FantasyCalc fetch failed: ${err.message}`);
+    if (existsSync(cacheFile)) {
+      console.warn("  → falling back to cached fantasycalc.json");
+      const cached = JSON.parse(await readFile(cacheFile, "utf8"));
+      return Array.isArray(cached) ? cached : [];
+    }
+    return [];
+  }
+}
+
+// "Ward, Cam" -> "cam ward"; strips common suffixes
+function mflToFirstLast(mflName) {
+  const comma = mflName.indexOf(",");
+  const raw =
+    comma >= 0
+      ? `${mflName.slice(comma + 1).trim()} ${mflName.slice(0, comma).trim()}`
+      : mflName.trim();
+  return raw
+    .toLowerCase()
+    .replace(/\s+(jr\.?|sr\.?|ii|iii|iv|v)$/i, "")
+    .replace(/['']/g, "")
+    .trim();
+}
+
+// FC only covers offensive positions — reject cross-position name collisions (e.g.
+// an IDP rookie with the same name as a veteran WR in the FC dataset).
+const FC_TO_GROUP = { QB: "QB", RB: "RB", WR: "WR", TE: "TE" };
+
+function buildFcValueMap(fcData) {
+  // normalized "first last" -> { value, fcPos } (highest value wins if duplicates)
+  const byName = new Map();
+  for (const entry of fcData) {
+    const name = (entry.player?.name ?? "").toLowerCase().trim()
+      .replace(/\s+(jr\.?|sr\.?|ii|iii|iv|v)$/i, "")
+      .replace(/['']/g, "");
+    if (!name) continue;
+    const val = Number(entry.value) || 0;
+    const fcPos = entry.player?.position ?? "";
+    const existing = byName.get(name);
+    if (!existing || val > existing.value) byName.set(name, { value: val, fcPos });
+  }
+  return byName;
+}
+
+function getFcValue(rookie, fcByName, maxFcValue) {
+  if (maxFcValue === 0) return null;
+  // IDP groups have no FC data — skip to avoid false matches with veteran offensive players.
+  if (!FC_TO_GROUP[rookie.group]) return null;
+  const key = mflToFirstLast(rookie.name);
+  const match = fcByName.get(key);
+  if (!match) return null;
+  // Position must agree between FC and MFL group (e.g. reject LB ↔ WR collisions).
+  if (FC_TO_GROUP[match.fcPos] !== rookie.group) return null;
+  return Math.round((match.value / maxFcValue) * 100 * 10) / 10;
 }
 
 async function writeJson(name, obj) {

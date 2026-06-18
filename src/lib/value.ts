@@ -45,6 +45,24 @@ const BASELINE_MULT: Record<PosGroup, number> = {
   PK: 0.2,
 };
 
+// Dynasty positional value multipliers applied to raw projections BEFORE VOR is
+// computed. This normalises cross-position comparison in an IDP league where raw
+// tackle points inflate IDP totals well above offensive production.
+// IDP positions carry a discount because they have shorter dynasty windows,
+// higher injury/scheme risk, and the market prices them below equivalent-scoring
+// offensive players. These do NOT affect the "Proj pts" column shown in the UI —
+// they only influence the VOR and value ranking.
+const DYNASTY_SCALE: Record<PosGroup, number> = {
+  QB: 0.80,  // 1QB format — hard to start multiples; veterans dominate
+  RB: 0.95,  // High value but shorter careers than WR
+  WR: 1.00,  // Benchmark: longest careers, highest long-term scarcity
+  TE: 0.90,  // Premium at the very top, easy to stream below that
+  PK: 0.25,  // Irrelevant in dynasty
+  DL: 0.60,  // IDP: shorter careers, scheme-dependent
+  LB: 0.55,  // IDP: most plentiful NFL position, career length ~4-5 yrs
+  DB: 0.60,  // IDP: CB premium helps, but still shorter than skill positions
+};
+
 export interface ValueSettings {
   modelWeight: number; // 0..1 weight on the projection/VOR model (rest is market/ADP)
   needWeight: number; // 0..1 how much roster need tilts the suggestion
@@ -77,12 +95,16 @@ export function buildBoard(
   const proj = new Map<string, number>();
   for (const r of rookies) proj.set(r.id, projectedPoints(r, scoring));
 
-  // Replacement points per group (the Nth-best rookie's projection).
+  // Dynasty-adjusted projections for VOR computation only (raw proj shown in UI).
+  const dynProj = new Map<string, number>();
+  for (const r of rookies) dynProj.set(r.id, proj.get(r.id)! * (DYNASTY_SCALE[r.group] ?? 1));
+
+  // Replacement level per group using dynasty-adjusted projections.
   const replacement: Partial<Record<PosGroup, number>> = {};
   for (const g of ALL_GROUPS) {
     const ptsDesc = rookies
       .filter((r) => r.group === g)
-      .map((r) => proj.get(r.id)!)
+      .map((r) => dynProj.get(r.id)!)
       .sort((a, b) => b - a);
     if (ptsDesc.length === 0) {
       replacement[g] = 0;
@@ -92,10 +114,11 @@ export function buildBoard(
     replacement[g] = ptsDesc[idx];
   }
 
-  // VOR + percentile.
+  // VOR uses dynasty-adjusted pts; raw proj (p) is kept for display only.
   const withVor = rookies.map((r) => {
     const p = proj.get(r.id)!;
-    const vor = p - (replacement[r.group] ?? 0);
+    const dp = dynProj.get(r.id)!;
+    const vor = dp - (replacement[r.group] ?? 0);
     return { r, p, vor };
   });
   const vorSorted = [...withVor].sort((a, b) => a.vor - b.vor);
@@ -109,8 +132,14 @@ export function buildBoard(
 
   const ranked: RankedRookie[] = withVor.map(({ r, p, vor }) => {
     const vorPct = vorPctById.get(r.id)!;
-    const adpPct = r.adp != null ? 100 * (1 - clamp((r.adp - 1) / horizon, 0, 1)) : null;
-    const value = adpPct != null ? mw * vorPct + (1 - mw) * adpPct : vorPct;
+    const adpPctMFL = r.adp != null ? 100 * (1 - clamp((r.adp - 1) / horizon, 0, 1)) : null;
+    const adpPctFC = r.fcValue ?? null;
+    const adpPcts = ([adpPctMFL, adpPctFC] as (number | null)[]).filter((v): v is number => v != null);
+    const adpPct = adpPcts.length > 0 ? adpPcts.reduce((a, b) => a + b, 0) / adpPcts.length : null;
+    // Players with no market data use only the model fraction of vorPct (adpPct treated as 0).
+    // This ensures the model-vs-market slider has genuine effect: moving left (pure market)
+    // pushes unranked players to the bottom; moving right (pure model) relies on VOR alone.
+    const value = mw * vorPct + (1 - mw) * (adpPct ?? 0);
     return {
       ...r,
       proj: p,
