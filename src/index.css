@@ -398,19 +398,6 @@ h3 {
   background: rgba(245, 165, 36, 0.06);
 }
 
-/* value bar */
-.vbar {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--bg-elev-2);
-  overflow: hidden;
-  min-width: 60px;
-}
-.vbar > span {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
-}
 
 /* ---- draft helper layout ---- */
 .draft-grid {
