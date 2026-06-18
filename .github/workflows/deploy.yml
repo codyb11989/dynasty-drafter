@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch: {}
+  # Lets the friendlier "Refresh data" workflow reuse this exact sync+build+deploy
+  # pipeline, so there's no duplicated logic to keep in sync.
+  workflow_call: {}
   # Daily refresh so the live site's rosters/ADP stay current without a push.
   schedule:
     - cron: "0 11 * * *" # 11:00 UTC (~7am ET)
