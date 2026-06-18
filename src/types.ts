@@ -73,6 +73,7 @@ export interface Rookie {
   projPointsOverride: number | null;
   adp: number | null;
   adpRank: number | null;
+  fcValue: number | null; // 0-100 FantasyCalc dynasty value (higher = better)
 }
 
 export type Rosters = Record<string, string[]>; // franchiseId -> playerIds
