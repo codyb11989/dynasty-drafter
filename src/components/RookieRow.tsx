@@ -60,11 +60,6 @@ export default function RookieRow({
           {rookie.vor > 0 ? `+${rookie.vor.toFixed(0)}` : rookie.vor.toFixed(0)}
         </td>
         <td className="num muted hide-mobile">{rookie.adp != null ? rookie.adp.toFixed(1) : "—"}</td>
-        <td>
-          <div className="vbar" title={`value ${rookie.value.toFixed(0)}`}>
-            <span style={{ width: `${rookie.value}%` }} />
-          </div>
-        </td>
         <td className="num">
           {isDrafted ? (
             <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
