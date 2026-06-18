@@ -48,6 +48,7 @@ body {
   background: radial-gradient(1200px 600px at 70% -10%, #18202b 0%, var(--bg) 55%);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+  overflow-x: clip; /* clip without creating a new scroll container (preserves sticky) */
 }
 a {
   color: var(--info);
@@ -418,6 +419,9 @@ h3 {
   gap: 18px;
   align-items: start;
 }
+.draft-grid > * {
+  min-width: 0; /* allow grid items to shrink so overflow-x:auto on table wrapper works */
+}
 .sticky-side {
   position: sticky;
   top: 70px;
@@ -450,6 +454,39 @@ h3 {
   }
   .hide-mobile {
     display: none;
+  }
+
+  /* topbar: brand on row 1, nav scrolls horizontally on row 2 */
+  .topbar-inner {
+    flex-wrap: wrap;
+    padding: 8px 14px 0;
+    gap: 4px;
+  }
+  .topbar-spacer {
+    display: none;
+  }
+  .nav {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    gap: 2px;
+    scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+  .nav a {
+    white-space: nowrap;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  /* expanded rookie detail: stack columns vertically */
+  .detail-breakdown,
+  .detail-stats {
+    min-width: 0 !important;
+    width: 100%;
   }
 }
 
@@ -580,4 +617,11 @@ h3 {
   text-transform: uppercase;
   letter-spacing: 0.4px;
   margin-bottom: 6px;
+}
+.detail-breakdown {
+  min-width: 240px;
+}
+.detail-stats {
+  min-width: 280px;
+  flex: 1;
 }
