@@ -74,6 +74,9 @@ export interface Rookie {
   adp: number | null;
   adpRank: number | null;
   fcValue: number | null; // 0-100 FantasyCalc dynasty value (higher = better)
+  fcOverallRank: number | null; // FC rank among all dynasty players (1 = best)
+  fcPosRank: number | null; // FC rank within position
+  fcTrend: number | null; // 30-day FC value change (positive = rising)
 }
 
 export type Rosters = Record<string, string[]>; // franchiseId -> playerIds
@@ -93,6 +96,14 @@ export type AdpMap = Record<
   string,
   { avgPick: number; rank: number; minPick: number; maxPick: number; drafts: number }
 >;
+
+/** FC dynasty values for existing (non-rookie) rostered players + position distributions. */
+export interface PlayerValues {
+  /** MFL player ID → { v: raw FC value, p: position group } */
+  players: Record<string, { v: number; p: string }>;
+  /** Sorted-descending FC raw values for each covered position (all FC players, not just rostered). */
+  dist: Record<string, number[]>;
+}
 
 export interface Meta {
   syncedAt: string;

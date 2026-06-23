@@ -1,4 +1,4 @@
-import type { League, PlayerMap, PosGroup, Rookie, Rosters, Scoring, StarterSlot } from "../types";
+import type { League, PlayerMap, PlayerValues, PosGroup, Rookie, Rosters, Scoring, StarterSlot } from "../types";
 import { projectedPoints } from "./scoring";
 
 // Map a league starter-slot name (which may combine positions) to a group.
@@ -163,6 +163,65 @@ export function buildBoard(
   return ranked;
 }
 
+// ---- Roster quality (skill-based position strength) ------------------------
+
+// FC only covers offensive positions; IDP stays count-only.
+const FC_COVERED: Set<PosGroup> = new Set(["QB", "RB", "WR", "TE"]);
+
+/**
+ * For each franchise's offensive positions, score how strong their existing
+ * starters are relative to the league replacement level (i.e., the Nth-best
+ * dynasty player where N = franchiseCount × starterDemand).
+ *
+ * Returns a 0..1 score where 1.0 = exactly at replacement level and values
+ * above 1.0 mean above replacement. IDP/PK return null (no FC data).
+ */
+export function rosterStrengthByGroup(
+  franchiseId: string | null,
+  rosters: Rosters,
+  playerValues: PlayerValues,
+  league: League,
+): Partial<Record<PosGroup, number>> {
+  if (!franchiseId) return {};
+  const demand = starterDemand(league);
+  const fc = league.franchiseCount || 10;
+  const result: Partial<Record<PosGroup, number>> = {};
+
+  // Collect FC values for this team's rostered players, grouped by position.
+  const valuesByGroup: Partial<Record<PosGroup, number[]>> = {};
+  for (const pid of rosters[franchiseId] ?? []) {
+    const entry = playerValues.players[pid];
+    if (!entry) continue;
+    const g = entry.p as PosGroup;
+    if (!FC_COVERED.has(g)) continue;
+    (valuesByGroup[g] ??= []).push(entry.v);
+  }
+
+  for (const g of FC_COVERED) {
+    const dist = playerValues.dist[g];
+    if (!dist || dist.length === 0) continue;
+    const d = demand[g];
+    if (d === 0) continue;
+
+    // Replacement = the player at position (fc × d) in the sorted distribution.
+    const replIdx = clamp(Math.round(fc * d) - 1, 0, dist.length - 1);
+    const replValue = dist[replIdx];
+    if (replValue <= 0) continue;
+
+    const teamVals = (valuesByGroup[g] ?? []).sort((a, b) => b - a);
+    if (teamVals.length === 0) {
+      result[g] = 0;
+      continue;
+    }
+    // Average FC value of the top-d starters (pad with 0 if fewer than d).
+    let sum = 0;
+    for (let i = 0; i < d; i++) sum += teamVals[i] ?? 0;
+    result[g] = clamp((sum / d) / replValue, 0, 2);
+  }
+
+  return result;
+}
+
 // ---- Roster need (for "Suggest my next pick") ------------------------------
 
 /** Starting requirement per group from the league's lineup rules. */
@@ -199,6 +258,8 @@ export interface Suggestion {
 /**
  * Suggest the next pick: blends overall value with how much your roster needs
  * each position. `myCounts` should already include rookies you've drafted today.
+ * `rosterStrength` (from rosterStrengthByGroup) adds quality-based weighting on
+ * top of the count-based deficit — a team with 3 mediocre WRs can still have a WR need.
  */
 export function suggestPicks(
   board: RankedRookie[],
@@ -207,17 +268,29 @@ export function suggestPicks(
   myCounts: Record<PosGroup, number> | null,
   settings: ValueSettings = DEFAULT_SETTINGS,
   limit = 5,
+  rosterStrength?: Partial<Record<PosGroup, number>>,
 ): Suggestion[] {
   const demand = starterDemand(league);
   const avail = board.filter((r) => available.has(r.id));
 
-  // Need score per group: 0..1, higher when you're below your starting demand.
+  // Need score per group: 0..1, higher when you're below your starting demand
+  // or when your existing starters are below replacement quality.
   const need: Record<PosGroup, number> = Object.fromEntries(
     ALL_GROUPS.map((g) => {
       if (!myCounts) return [g, 0];
       const deficit = Math.max(0, demand[g] - myCounts[g]);
-      const depthGap = Math.max(0, demand[g] + 1 - myCounts[g]); // some bench depth
-      return [g, clamp(0.7 * deficit + 0.3 * depthGap, 0, 3) / 3];
+      const depthGap = Math.max(0, demand[g] + 1 - myCounts[g]);
+      const countNeed = clamp(0.7 * deficit + 0.3 * depthGap, 0, 3) / 3;
+
+      // Quality-based need: how far below replacement are the team's starters?
+      // strength < 1.0 means starters average below replacement level.
+      const strength = rosterStrength?.[g] ?? null;
+      const qualityNeed = strength !== null ? clamp(1 - strength, 0, 1) : 0;
+
+      // Take the higher of count need and quality need. Quality need at full weight
+      // so that teams below replacement quality (strength < 0.5) get a clear signal
+      // even when their count meets the starter floor.
+      return [g, Math.max(countNeed, qualityNeed)];
     }),
   ) as Record<PosGroup, number>;
 
@@ -229,7 +302,18 @@ export function suggestPicks(
     const reasons: string[] = [];
     reasons.push(`${ordinal(r.posRank)} ${GROUP_LABEL[r.group]} on the board`);
     if (r.adp != null) reasons.push(`market ADP ${r.adp.toFixed(1)}`);
-    if (myCounts && need[r.group] > 0.5) reasons.push(`fills a ${GROUP_LABEL[r.group]} need`);
+    if (myCounts && need[r.group] > 0.5) {
+      const strength = rosterStrength?.[r.group] ?? null;
+      // Distinguish count deficit from quality weakness in the reason text.
+      const hasCountDeficit = myCounts[r.group] < demand[r.group];
+      if (hasCountDeficit) {
+        reasons.push(`fills a ${GROUP_LABEL[r.group]} need`);
+      } else if (strength !== null && strength < 0.85) {
+        reasons.push(`upgrades thin ${GROUP_LABEL[r.group]}`);
+      } else {
+        reasons.push(`fills a ${GROUP_LABEL[r.group]} need`);
+      }
+    }
     if (r.vor > 0) reasons.push(`+${r.vor.toFixed(0)} pts over replacement`);
     return { rookie: r, score: Math.round(score * 10) / 10, reasons };
   });
