@@ -199,6 +199,7 @@ async function main() {
     fetchFantasyCalcValues(),
   ]);
 
+  const fcByMflId = buildFcByMflId(fcRaw);
   const fcByName = buildFcValueMap(fcRaw);
   // Normalize FC values against the best match in our actual rookie pool (offset-safe).
   // We compute this after matching so only rookies we care about affect the ceiling.
@@ -230,6 +231,9 @@ async function main() {
         adp: a ? a.avgPick : null,
         adpRank: a ? a.rank : null,
         fcValue: null, // filled below
+        fcOverallRank: null,
+        fcPosRank: null,
+        fcTrend: null,
       };
       return entry;
     })
@@ -240,15 +244,31 @@ async function main() {
   let maxFcValue = 0;
   for (const r of rookiePool) {
     if (!FC_TO_GROUP[r.group]) continue; // skip IDP — FC doesn't cover them
-    const match = fcByName.get(mflToFirstLast(r.name));
-    if (match && FC_TO_GROUP[match.fcPos] === r.group && match.value > maxFcValue) {
-      maxFcValue = match.value;
+    // Try mflId first, then name
+    const fcEntry = fcByMflId.get(r.id);
+    const rawVal = fcEntry && FC_TO_GROUP[fcEntry.player?.position] === r.group
+      ? fcEntry.value
+      : (fcByName.get(mflToFirstLast(r.name))?.value ?? 0);
+    if (rawVal > maxFcValue) maxFcValue = rawVal;
+  }
+  for (const r of rookiePool) {
+    r.fcValue = getFcValue(r, fcByMflId, fcByName, maxFcValue);
+    // Also store rank/trend from FC (useful context in the UI).
+    const fcEntry = fcByMflId.get(r.id);
+    if (fcEntry) {
+      r.fcOverallRank = fcEntry.overallRank ?? null;
+      r.fcPosRank = fcEntry.positionRank ?? null;
+      r.fcTrend = fcEntry.trend30Day ?? null;
     }
   }
-  for (const r of rookiePool) r.fcValue = getFcValue(r, fcByName, maxFcValue);
 
   const fcCount = rookiePool.filter((r) => r.fcValue != null).length;
   console.log(`  FantasyCalc: matched ${fcCount}/${rookiePool.length} rookies (max raw value ${maxFcValue})`);
+
+  // Build player values for existing (non-rookie) rostered players.
+  const playerValues = buildPlayerValues(fcRaw, rosters, playerMap);
+  const pvCount = Object.keys(playerValues.players).length;
+  console.log(`  PlayerValues: ${pvCount} rostered players matched to FC`);
 
   // Write everything.
   await Promise.all([
@@ -258,6 +278,7 @@ async function main() {
     writeJson("players.json", playerMap),
     writeJson("adp.json", adp),
     writeJson("rookies.json", rookiePool),
+    writeJson("playerValues.json", playerValues),
     writeJson("meta.json", {
       syncedAt: new Date().toISOString(),
       year: YEAR,
@@ -335,6 +356,17 @@ function mflToFirstLast(mflName) {
 // an IDP rookie with the same name as a veteran WR in the FC dataset).
 const FC_TO_GROUP = { QB: "QB", RB: "RB", WR: "WR", TE: "TE" };
 
+// Build a map keyed by MFL player ID (more reliable than name matching).
+function buildFcByMflId(fcData) {
+  const byId = new Map();
+  for (const entry of fcData) {
+    const mflId = entry.player?.mflId;
+    if (!mflId) continue;
+    byId.set(mflId, entry);
+  }
+  return byId;
+}
+
 function buildFcValueMap(fcData) {
   // normalized "first last" -> { value, fcPos } (highest value wins if duplicates)
   const byName = new Map();
@@ -351,16 +383,51 @@ function buildFcValueMap(fcData) {
   return byName;
 }
 
-function getFcValue(rookie, fcByName, maxFcValue) {
+function getFcValue(rookie, fcByMflId, fcByName, maxFcValue) {
   if (maxFcValue === 0) return null;
   // IDP groups have no FC data — skip to avoid false matches with veteran offensive players.
   if (!FC_TO_GROUP[rookie.group]) return null;
+  // Try direct mflId match first (no name-collision risk).
+  const byId = fcByMflId.get(rookie.id);
+  if (byId && FC_TO_GROUP[byId.player?.position] === rookie.group) {
+    return Math.round((byId.value / maxFcValue) * 100 * 10) / 10;
+  }
+  // Fall back to name match.
   const key = mflToFirstLast(rookie.name);
   const match = fcByName.get(key);
   if (!match) return null;
-  // Position must agree between FC and MFL group (e.g. reject LB ↔ WR collisions).
   if (FC_TO_GROUP[match.fcPos] !== rookie.group) return null;
   return Math.round((match.value / maxFcValue) * 100 * 10) / 10;
+}
+
+// Build playerValues.json: FC values for all rostered players + position distributions.
+// Used at runtime to score roster quality per position.
+function buildPlayerValues(fcRaw, rosters, playerMap) {
+  const fcByMflId = buildFcByMflId(fcRaw);
+
+  // Per-position sorted FC value distributions (all FC players, not just rostered).
+  const dist = { QB: [], RB: [], WR: [], TE: [] };
+  for (const entry of fcRaw) {
+    const pos = entry.player?.position;
+    if (dist[pos]) dist[pos].push(Number(entry.value) || 0);
+  }
+  for (const pos of Object.keys(dist)) {
+    dist[pos].sort((a, b) => b - a);
+  }
+
+  // Per-player values for all rostered players with FC coverage (offensive only).
+  const players = {};
+  const rosteredIds = new Set(Object.values(rosters).flat());
+  for (const id of rosteredIds) {
+    const p = playerMap[id];
+    if (!p || !FC_TO_GROUP[p.group]) continue;
+    const fc = fcByMflId.get(id);
+    if (fc) {
+      players[id] = { v: Number(fc.value) || 0, p: p.group };
+    }
+  }
+
+  return { players, dist };
 }
 
 async function writeJson(name, obj) {

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useAppData } from "../App";
 import { useDraftStore } from "../store/draftStore";
-import { buildBoard, rosterCountByGroup, type RankedRookie } from "../lib/value";
+import { buildBoard, rosterCountByGroup, rosterStrengthByGroup, type RankedRookie } from "../lib/value";
 import { ALL_GROUPS } from "../lib/value";
 import type { PosGroup, Rookie } from "../types";
 
@@ -12,11 +12,13 @@ export interface BoardResult {
   availableIds: Set<string>;
   /** my full roster counts by group: existing dynasty roster + rookies I drafted today */
   myCounts: Record<PosGroup, number> | null;
+  /** quality strength per group (0..∞, 1.0 = at replacement); null for IDP/PK or no FC data */
+  myStrength: Partial<Record<PosGroup, number>> | null;
   myRookieIds: string[];
 }
 
 export function useBoard(): BoardResult {
-  const { rookies, scoring, league, rosters, players } = useAppData();
+  const { rookies, scoring, league, rosters, players, playerValues } = useAppData();
   const { draftedBy, myFranchiseId, overrides, modelWeight, needWeight } = useDraftStore();
 
   return useMemo(() => {
@@ -35,16 +37,18 @@ export function useBoard(): BoardResult {
     const myRookieIds = Object.keys(draftedBy).filter((id) => draftedBy[id] === myFranchiseId);
 
     let myCounts: Record<PosGroup, number> | null = null;
+    let myStrength: Partial<Record<PosGroup, number>> | null = null;
     if (myFranchiseId) {
       myCounts = rosterCountByGroup(myFranchiseId, rosters, players);
       for (const id of myRookieIds) {
         const g = byId.get(id)?.group;
         if (g) myCounts[g] += 1;
       }
+      myStrength = rosterStrengthByGroup(myFranchiseId, rosters, playerValues, league);
     }
 
-    return { board, byId, available, availableIds, myCounts, myRookieIds };
-  }, [rookies, scoring, league, rosters, players, draftedBy, myFranchiseId, overrides, modelWeight, needWeight]);
+    return { board, byId, available, availableIds, myCounts, myStrength, myRookieIds };
+  }, [rookies, scoring, league, rosters, players, playerValues, draftedBy, myFranchiseId, overrides, modelWeight, needWeight]);
 }
 
 export { ALL_GROUPS };

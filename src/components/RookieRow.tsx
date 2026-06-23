@@ -129,6 +129,10 @@ function RookieDetail({ rookie, scoring }: { rookie: RankedRookie; scoring: Scor
     setOverride(rookie.id, next);
   };
 
+  const hasFcContext = rookie.fcOverallRank != null || rookie.fcPosRank != null;
+  const trendSign = (rookie.fcTrend ?? 0) >= 0 ? "▲" : "▼";
+  const trendColor = (rookie.fcTrend ?? 0) >= 0 ? "var(--green, #22c55e)" : "var(--accent)";
+
   return (
     <div className="row wrap" style={{ alignItems: "flex-start", gap: 24, padding: "6px 4px 10px" }}>
       <div className="detail-breakdown">
@@ -147,6 +151,20 @@ function RookieDetail({ rookie, scoring }: { rookie: RankedRookie; scoring: Scor
               </span>
             </div>
           ))
+        )}
+        {hasFcContext && (
+          <div style={{ marginTop: 10, fontSize: 12 }}>
+            <div className="faint detail-h" style={{ marginBottom: 4 }}>Dynasty market (FantasyCalc)</div>
+            <div className="muted">
+              {rookie.fcOverallRank != null && <span>Overall #{rookie.fcOverallRank}</span>}
+              {rookie.fcPosRank != null && <span className="faint"> · #{rookie.fcPosRank} {rookie.group}</span>}
+              {rookie.fcTrend != null && Math.abs(rookie.fcTrend) >= 10 && (
+                <span style={{ marginLeft: 8, color: trendColor, fontVariant: "tabular-nums" }}>
+                  {trendSign} {Math.abs(rookie.fcTrend)} (30d)
+                </span>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
