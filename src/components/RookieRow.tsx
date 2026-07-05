@@ -60,11 +60,6 @@ export default function RookieRow({
           {rookie.vor > 0 ? `+${rookie.vor.toFixed(0)}` : rookie.vor.toFixed(0)}
         </td>
         <td className="num muted hide-mobile">{rookie.adp != null ? rookie.adp.toFixed(1) : "—"}</td>
-        <td>
-          <div className="vbar" title={`value ${rookie.value.toFixed(0)}`}>
-            <span style={{ width: `${rookie.value}%` }} />
-          </div>
-        </td>
         <td className="num">
           {isDrafted ? (
             <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
@@ -142,9 +137,13 @@ function RookieDetail({ rookie, scoring }: { rookie: RankedRookie; scoring: Scor
     setOverride(rookie.id, matchesModel ? null : next);
   };
 
+  const hasFcContext = rookie.fcOverallRank != null || rookie.fcPosRank != null;
+  const trendSign = (rookie.fcTrend ?? 0) >= 0 ? "▲" : "▼";
+  const trendColor = (rookie.fcTrend ?? 0) >= 0 ? "var(--green, #22c55e)" : "var(--accent)";
+
   return (
     <div className="row wrap" style={{ alignItems: "flex-start", gap: 24, padding: "6px 4px 10px" }}>
-      <div style={{ minWidth: 240 }}>
+      <div className="detail-breakdown">
         <div className="faint detail-h">How {rookie.proj.toFixed(0)} pts are scored</div>
         {breakdown.length === 0 ? (
           <div className="muted" style={{ fontSize: 13 }}>Flat projection (no statline) — e.g. kicker.</div>
@@ -161,10 +160,24 @@ function RookieDetail({ rookie, scoring }: { rookie: RankedRookie; scoring: Scor
             </div>
           ))
         )}
+        {hasFcContext && (
+          <div style={{ marginTop: 10, fontSize: 12 }}>
+            <div className="faint detail-h" style={{ marginBottom: 4 }}>Dynasty market (FantasyCalc)</div>
+            <div className="muted">
+              {rookie.fcOverallRank != null && <span>Overall #{rookie.fcOverallRank}</span>}
+              {rookie.fcPosRank != null && <span className="faint"> · #{rookie.fcPosRank} {rookie.group}</span>}
+              {rookie.fcTrend != null && Math.abs(rookie.fcTrend) >= 10 && (
+                <span style={{ marginLeft: 8, color: trendColor, fontVariant: "tabular-nums" }}>
+                  {trendSign} {Math.abs(rookie.fcTrend)} (30d)
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {stats.length > 0 && (
-        <div style={{ minWidth: 280, flex: 1 }}>
+        <div className="detail-stats">
           <div className="row spread" style={{ marginBottom: 6 }}>
             <span className="faint detail-h" style={{ marginBottom: 0 }}>Tune projected stats</span>
             {hasOverride && (

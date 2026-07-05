@@ -82,7 +82,6 @@ export default function DraftHelper() {
                   <th className="num">Proj</th>
                   <th className="num hide-mobile">VOR</th>
                   <th className="num hide-mobile">ADP</th>
-                  <th>Value</th>
                   <th className="num"></th>
                 </tr>
               </thead>

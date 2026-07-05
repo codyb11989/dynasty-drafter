@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useAppData, useSync } from "../App";
-import { useDraftStore, type DraftBackup } from "../store/draftStore";
+import { OTHER, useDraftStore, type DraftBackup } from "../store/draftStore";
+import { buildDetailCsv, buildMflImportCsv, downloadFile } from "../lib/exportDraft";
 import { DEFAULT_SETTINGS } from "../lib/value";
 
 export default function Settings() {
-  const { league, meta } = useAppData();
+  const { league, meta, rookies } = useAppData();
   const { refresh, status, error: syncError } = useSync();
   const {
     myFranchiseId,
@@ -19,6 +20,8 @@ export default function Settings() {
     importState,
   } = useDraftStore();
   const draftedCount = Object.keys(draftedBy).length;
+  const knownPickCount = pickOrder.filter((id) => draftedBy[id] && draftedBy[id] !== OTHER).length;
+  const unknownPickCount = pickOrder.length - knownPickCount;
 
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
@@ -233,6 +236,60 @@ export default function Settings() {
             <p className="faint" style={{ fontSize: 12, marginTop: 8 }}>
               {backupMsg}
             </p>
+          )}
+        </div>
+
+        <div className="card">
+          <h3 style={{ fontSize: 15, marginBottom: 10 }}>Export draft results</h3>
+          <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+            Download draft picks to upload into MFL after the draft is complete. Use <strong>MFL import
+            CSV</strong> in the commissioner panel under <em>Commission → Draft → Import Draft Picks</em>.
+          </p>
+
+          {pickOrder.length === 0 ? (
+            <p className="faint" style={{ fontSize: 13 }}>No picks recorded yet.</p>
+          ) : (
+            <>
+              <dl className="kv" style={{ marginBottom: 10 }}>
+                <dt>Total picks</dt>
+                <dd>{pickOrder.length}</dd>
+                <dt>With franchise</dt>
+                <dd>{knownPickCount}</dd>
+                {unknownPickCount > 0 && (
+                  <>
+                    <dt>Unassigned</dt>
+                    <dd style={{ color: "var(--warn, #e8b84b)" }}>
+                      {unknownPickCount} — omitted from MFL import
+                    </dd>
+                  </>
+                )}
+              </dl>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <button
+                  className="btn sm"
+                  disabled={knownPickCount === 0}
+                  onClick={() =>
+                    downloadFile(
+                      buildMflImportCsv(pickOrder, draftedBy),
+                      `draft-${league.year}-mfl-import.csv`,
+                    )
+                  }
+                >
+                  ↓ MFL import CSV
+                </button>
+                <button
+                  className="btn sm"
+                  onClick={() =>
+                    downloadFile(
+                      buildDetailCsv(pickOrder, draftedBy, rookies, league),
+                      `draft-${league.year}-results.csv`,
+                    )
+                  }
+                >
+                  ↓ Full detail CSV
+                </button>
+              </div>
+            </>
           )}
         </div>
       </div>

@@ -9,11 +9,11 @@ import PositionBadge from "./PositionBadge";
 export default function SuggestPanel({ onPick }: { onPick?: (id: string) => void }) {
   const { league } = useAppData();
   const { myFranchiseId, modelWeight, needWeight, markDrafted } = useDraftStore();
-  const { board, availableIds, myCounts } = useBoard();
+  const { board, availableIds, myCounts, myStrength } = useBoard();
 
   const suggestions = useMemo(
-    () => suggestPicks(board, availableIds, league, myCounts, { modelWeight, needWeight }, 5),
-    [board, availableIds, league, myCounts, modelWeight, needWeight],
+    () => suggestPicks(board, availableIds, league, myCounts, { modelWeight, needWeight }, 5, myStrength ?? undefined),
+    [board, availableIds, league, myCounts, myStrength, modelWeight, needWeight],
   );
 
   if (suggestions.length === 0) {

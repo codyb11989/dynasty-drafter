@@ -56,6 +56,9 @@ function rookie(partial: Partial<Rookie>): Rookie {
     adp: null,
     adpRank: null,
     fcValue: null,
+    fcOverallRank: null,
+    fcPosRank: null,
+    fcTrend: null,
     ...partial,
   };
 }

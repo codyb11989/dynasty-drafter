@@ -5,10 +5,17 @@ import { ALL_GROUPS, starterDemand } from "../lib/value";
 import { displayName, franchiseName } from "../lib/format";
 import PositionBadge from "./PositionBadge";
 
+function strengthLabel(strength: number | undefined): { text: string; color: string } | null {
+  if (strength === undefined) return null; // IDP/PK: no FC data
+  if (strength >= 1.0) return null; // at or above replacement — no warning needed
+  if (strength >= 0.7) return { text: "thin", color: "var(--warn, #d97706)" };
+  return { text: "weak", color: "var(--accent)" };
+}
+
 export default function NeedsPanel() {
   const { league } = useAppData();
   const { myFranchiseId, undraft } = useDraftStore();
-  const { myCounts, myRookieIds, byId } = useBoard();
+  const { myCounts, myStrength, myRookieIds, byId } = useBoard();
   const demand = starterDemand(league);
 
   if (!myFranchiseId) {
@@ -34,15 +41,20 @@ export default function NeedsPanel() {
           const have = myCounts?.[g] ?? 0;
           const need = demand[g];
           const short = Math.max(0, need - have);
+          const qual = strengthLabel(myStrength?.[g]);
           return (
             <div className="row spread" key={g} style={{ fontSize: 13 }}>
               <div className="row" style={{ gap: 8 }}>
                 <PositionBadge group={g} />
                 <span className="muted">starts {need}</span>
               </div>
-              <span className={short > 0 ? "" : "faint"} style={{ fontVariant: "tabular-nums" }}>
+              <span style={{ fontVariant: "tabular-nums" }} className={short === 0 && !qual ? "faint" : ""}>
                 {have} rostered{" "}
-                {short > 0 ? <span style={{ color: "var(--accent)" }}>· need {short}</span> : "· set"}
+                {short > 0
+                  ? <span style={{ color: "var(--accent)" }}>· need {short}</span>
+                  : qual
+                    ? <span style={{ color: qual.color }}>· {qual.text}</span>
+                    : "· set"}
               </span>
             </div>
           );

@@ -28,6 +28,9 @@ const base: Rookie = {
   adp: null,
   adpRank: null,
   fcValue: null,
+  fcOverallRank: null,
+  fcPosRank: null,
+  fcTrend: null,
 };
 
 describe("scoreStatLine", () => {

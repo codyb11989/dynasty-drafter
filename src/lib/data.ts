@@ -1,4 +1,4 @@
-import type { AdpMap, League, Meta, PlayerMap, Rookie, Rosters, Scoring } from "../types";
+import type { AdpMap, League, Meta, PlayerMap, PlayerValues, Rookie, Rosters, Scoring } from "../types";
 
 export interface AppData {
   league: League;
@@ -7,6 +7,7 @@ export interface AppData {
   players: PlayerMap;
   adp: AdpMap;
   rookies: Rookie[];
+  playerValues: PlayerValues;
   meta: Meta;
 }
 
@@ -21,6 +22,16 @@ async function getJson<T>(name: string, bust?: boolean): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function getJsonOptional<T>(name: string, fallback: T, bust?: boolean): Promise<T> {
+  try {
+    return await getJson<T>(name, bust);
+  } catch {
+    return fallback;
+  }
+}
+
+const EMPTY_PLAYER_VALUES: PlayerValues = { players: {}, dist: {} };
+
 /**
  * Load the league data bundle from public/data/.
  * Pass `{ bust: true }` for a manual sync — re-fetches fresh from the network
@@ -28,14 +39,15 @@ async function getJson<T>(name: string, bust?: boolean): Promise<T> {
  */
 export async function loadAllData(opts: { bust?: boolean } = {}): Promise<AppData> {
   const { bust } = opts;
-  const [league, scoring, rosters, players, adp, rookies, meta] = await Promise.all([
+  const [league, scoring, rosters, players, adp, rookies, playerValues, meta] = await Promise.all([
     getJson<League>("league.json", bust),
     getJson<Scoring>("scoring.json", bust),
     getJson<Rosters>("rosters.json", bust),
     getJson<PlayerMap>("players.json", bust),
     getJson<AdpMap>("adp.json", bust),
     getJson<Rookie[]>("rookies.json", bust),
+    getJsonOptional<PlayerValues>("playerValues.json", EMPTY_PLAYER_VALUES, bust),
     getJson<Meta>("meta.json", bust),
   ]);
-  return { league, scoring, rosters, players, adp, rookies, meta };
+  return { league, scoring, rosters, players, adp, rookies, playerValues, meta };
 }
