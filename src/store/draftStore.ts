@@ -16,6 +16,8 @@ interface DraftState {
   /** value-engine knobs. */
   modelWeight: number;
   needWeight: number;
+  /** the meta.year of the last data sync we reconciled against, to detect a new season. */
+  lastSeenYear: string | null;
 
   markDrafted: (id: string, franchiseId?: string) => void;
   undraft: (id: string) => void;
@@ -24,6 +26,9 @@ interface DraftState {
   setOverride: (id: string, stats: StatLine | null) => void;
   setWeights: (w: { modelWeight?: number; needWeight?: number }) => void;
   resetDraft: () => void;
+  /** drop draftedBy/pickOrder/overrides entries whose player id is no longer in the synced rookie pool. */
+  reconcile: (validIds: Set<string>) => void;
+  setLastSeenYear: (year: string) => void;
 }
 
 export const useDraftStore = create<DraftState>()(
@@ -35,6 +40,7 @@ export const useDraftStore = create<DraftState>()(
       overrides: {},
       modelWeight: 0.5,
       needWeight: 0.35,
+      lastSeenYear: null,
 
       markDrafted: (id, franchiseId = OTHER) =>
         set((s) => ({
@@ -75,7 +81,37 @@ export const useDraftStore = create<DraftState>()(
         })),
 
       resetDraft: () => set({ draftedBy: {}, pickOrder: [] }),
+
+      reconcile: (validIds) =>
+        set((s) => {
+          let changed = false;
+
+          const draftedBy: Record<string, string> = {};
+          for (const [id, franchiseId] of Object.entries(s.draftedBy)) {
+            if (validIds.has(id)) draftedBy[id] = franchiseId;
+            else changed = true;
+          }
+
+          const pickOrder = s.pickOrder.filter((id) => validIds.has(id));
+          if (pickOrder.length !== s.pickOrder.length) changed = true;
+
+          const overrides: Record<string, StatLine> = {};
+          for (const [id, stats] of Object.entries(s.overrides)) {
+            if (validIds.has(id)) overrides[id] = stats;
+            else changed = true;
+          }
+
+          return changed ? { draftedBy, pickOrder, overrides } : s;
+        }),
+
+      setLastSeenYear: (year) => set({ lastSeenYear: year }),
     }),
-    { name: "dd-draft-v1" },
+    {
+      name: "dd-draft-v1",
+      version: 1,
+      // No schema changes yet — persisted state is merged onto the initial state above,
+      // so fields added since v0 (e.g. lastSeenYear) pick up their defaults automatically.
+      migrate: (persisted) => persisted as DraftState,
+    },
   ),
 );

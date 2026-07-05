@@ -17,6 +17,12 @@ export function buildMflImportCsv(
   return rows.join("\n");
 }
 
+/** Quote a CSV field per RFC 4180: wrap in quotes and double any embedded quotes. */
+function csvField(value: string): string {
+  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+}
+
 /**
  * Human-readable CSV with round/pick numbers, franchise names, player names, and positions.
  * Useful for record-keeping or sharing results outside MFL.
@@ -43,7 +49,7 @@ export function buildDetailCsv(
     const pname = rookie ? displayName(rookie.name) : playerId;
     const pos = rookie?.pos ?? "";
     const nflTeam = rookie?.team ?? "";
-    return [overall, round, pickInRound, fid, `"${fname}"`, playerId, `"${pname}"`, pos, nflTeam].join(",");
+    return [overall, round, pickInRound, fid, csvField(fname), playerId, csvField(pname), pos, nflTeam].join(",");
   });
 
   return [header, ...rows].join("\n");

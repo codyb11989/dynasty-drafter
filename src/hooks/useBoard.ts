@@ -19,7 +19,11 @@ export interface BoardResult {
 
 export function useBoard(): BoardResult {
   const { rookies, scoring, league, rosters, players, playerValues } = useAppData();
-  const { draftedBy, myFranchiseId, overrides, modelWeight, needWeight } = useDraftStore();
+  const draftedBy = useDraftStore((s) => s.draftedBy);
+  const myFranchiseId = useDraftStore((s) => s.myFranchiseId);
+  const overrides = useDraftStore((s) => s.overrides);
+  const modelWeight = useDraftStore((s) => s.modelWeight);
+  const needWeight = useDraftStore((s) => s.needWeight);
 
   return useMemo(() => {
     // Apply manual stat overrides before scoring.

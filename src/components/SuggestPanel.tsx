@@ -1,15 +1,19 @@
 import { useMemo } from "react";
 import { useAppData } from "../App";
 import { useDraftStore } from "../store/draftStore";
-import { useBoard } from "../hooks/useBoard";
+import { useBoardCtx } from "../context/BoardContext";
 import { suggestPicks } from "../lib/value";
 import { displayName, fmtPick } from "../lib/format";
 import PositionBadge from "./PositionBadge";
+import FranchisePicker from "./FranchisePicker";
 
 export default function SuggestPanel({ onPick }: { onPick?: (id: string) => void }) {
   const { league } = useAppData();
-  const { myFranchiseId, modelWeight, needWeight, markDrafted } = useDraftStore();
-  const { board, availableIds, myCounts, myStrength } = useBoard();
+  const myFranchiseId = useDraftStore((s) => s.myFranchiseId);
+  const modelWeight = useDraftStore((s) => s.modelWeight);
+  const needWeight = useDraftStore((s) => s.needWeight);
+  const markDrafted = useDraftStore((s) => s.markDrafted);
+  const { board, availableIds, myCounts, myStrength } = useBoardCtx();
 
   const suggestions = useMemo(
     () => suggestPicks(board, availableIds, league, myCounts, { modelWeight, needWeight }, 5, myStrength ?? undefined),
@@ -55,12 +59,19 @@ export default function SuggestPanel({ onPick }: { onPick?: (id: string) => void
         </div>
         <div className="reasons">{suggestions[0].reasons.join(" · ")}</div>
         <div className="row" style={{ marginTop: 10 }}>
-          <button className="btn primary sm" onClick={() => draftMine(top.id)} disabled={!myFranchiseId}>
+          <button
+            className="btn primary sm"
+            aria-label={`Draft ${displayName(top.name)} to my team`}
+            onClick={() => draftMine(top.id)}
+            disabled={!myFranchiseId}
+          >
             ✓ Draft to my team
           </button>
-          <button className="btn sm" onClick={() => markDrafted(top.id)}>
-            Taken by other
-          </button>
+          <FranchisePicker
+            league={league}
+            ariaLabel={`Mark ${displayName(top.name)} taken by franchise`}
+            onPick={(franchiseId) => markDrafted(top.id, franchiseId)}
+          />
         </div>
       </div>
 
@@ -82,6 +93,7 @@ export default function SuggestPanel({ onPick }: { onPick?: (id: string) => void
               <button
                 className="btn ghost sm"
                 title="Draft to my team"
+                aria-label={`Draft ${displayName(s.rookie.name)} to my team`}
                 onClick={() => draftMine(s.rookie.id)}
                 disabled={!myFranchiseId}
               >

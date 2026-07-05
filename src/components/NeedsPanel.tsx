@@ -1,6 +1,6 @@
 import { useAppData } from "../App";
 import { useDraftStore } from "../store/draftStore";
-import { useBoard } from "../hooks/useBoard";
+import { useBoardCtx } from "../context/BoardContext";
 import { ALL_GROUPS, starterDemand } from "../lib/value";
 import { displayName, franchiseName } from "../lib/format";
 import PositionBadge from "./PositionBadge";
@@ -14,8 +14,9 @@ function strengthLabel(strength: number | undefined): { text: string; color: str
 
 export default function NeedsPanel() {
   const { league } = useAppData();
-  const { myFranchiseId, undraft } = useDraftStore();
-  const { myCounts, myStrength, myRookieIds, byId } = useBoard();
+  const myFranchiseId = useDraftStore((s) => s.myFranchiseId);
+  const undraft = useDraftStore((s) => s.undraft);
+  const { myCounts, myStrength, myRookieIds, byId } = useBoardCtx();
   const demand = starterDemand(league);
 
   if (!myFranchiseId) {

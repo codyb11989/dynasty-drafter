@@ -2,11 +2,31 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { NavLink, Route, Routes } from "react-router-dom";
 import { loadAllData, type AppData } from "./lib/data";
 import { timeAgo } from "./lib/format";
+import { useDraftStore } from "./store/draftStore";
+import { BoardProvider } from "./context/BoardContext";
 import DraftHelper from "./pages/DraftHelper";
 import Rosters from "./pages/Rosters";
 import RulesScoring from "./pages/RulesScoring";
 import Players from "./pages/Players";
 import Settings from "./pages/Settings";
+
+/**
+ * Drop stale drafted/override entries left over from a previous rookie pool, and
+ * prompt to reset the board if this looks like a new season (meta.year changed).
+ */
+function reconcileWithFreshData(next: AppData) {
+  const store = useDraftStore.getState();
+  const validIds = new Set(next.rookies.map((r) => r.id));
+  store.reconcile(validIds);
+
+  if (store.lastSeenYear && store.lastSeenYear !== next.meta.year) {
+    const startFresh = window.confirm(
+      `New season detected (${store.lastSeenYear} → ${next.meta.year}). Reset your draft board for the new season? (Your team pick and tuning are kept either way.)`,
+    );
+    if (startFresh) store.resetDraft();
+  }
+  store.setLastSeenYear(next.meta.year);
+}
 
 const DataCtx = createContext<AppData | null>(null);
 export const useAppData = () => {
@@ -41,7 +61,12 @@ export default function App() {
   const syncedAtRef = useRef<string | null>(null);
 
   useEffect(() => {
-    loadAllData().then(setData).catch((e) => setError(String(e)));
+    loadAllData()
+      .then((next) => {
+        reconcileWithFreshData(next);
+        setData(next);
+      })
+      .catch((e) => setError(String(e)));
   }, []);
 
   // Track the loaded data's sync time so a manual refresh can tell "updated" from
@@ -59,6 +84,7 @@ export default function App() {
     loadAllData({ bust: true })
       .then((next) => {
         const changed = syncedAtRef.current !== next.meta.syncedAt;
+        reconcileWithFreshData(next);
         setData(next);
         setStatus(changed ? "updated" : "current");
         resetTimer.current = setTimeout(() => setStatus("idle"), 3000);
@@ -102,6 +128,7 @@ export default function App() {
   return (
     <DataCtx.Provider value={data}>
       <SyncCtx.Provider value={{ refresh, status, error: syncError }}>
+        <BoardProvider>
         <div className="app">
           <header className="topbar">
             <div className="topbar-inner">
@@ -143,6 +170,7 @@ export default function App() {
             </Routes>
           </main>
         </div>
+        </BoardProvider>
       </SyncCtx.Provider>
     </DataCtx.Provider>
   );

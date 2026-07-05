@@ -1,27 +1,32 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useAppData } from "../App";
 import { useDraftStore, OTHER } from "../store/draftStore";
 import { pointsBreakdown, GROUP_STATS, STAT_LABEL } from "../lib/scoring";
-import { aiSearchUrl, displayName, fmtPick, franchiseName, playerSearchQuery } from "../lib/format";
+import { aiSearchUrl, displayName, fmtPick, franchiseAbbrev, playerSearchQuery } from "../lib/format";
 import type { RankedRookie } from "../lib/value";
 import type { Scoring, StatKey, StatLine } from "../types";
 import PositionBadge from "./PositionBadge";
+import FranchisePicker from "./FranchisePicker";
 
-export default function RookieRow({
+function RookieRow({
   rookie,
   expanded,
   onToggle,
 }: {
   rookie: RankedRookie;
   expanded: boolean;
-  onToggle: () => void;
+  onToggle: (id: string) => void;
 }) {
   const { league, scoring } = useAppData();
-  const { draftedBy, myFranchiseId, markDrafted, undraft, overrides } = useDraftStore();
-  const takenBy = draftedBy[rookie.id];
+  const takenBy = useDraftStore((s) => s.draftedBy[rookie.id]);
+  const myFranchiseId = useDraftStore((s) => s.myFranchiseId);
+  const markDrafted = useDraftStore((s) => s.markDrafted);
+  const undraft = useDraftStore((s) => s.undraft);
+  const hasOverride = useDraftStore((s) => !!s.overrides[rookie.id]);
   const isMine = !!takenBy && takenBy === myFranchiseId;
   const isDrafted = !!takenBy;
   const rowClass = isMine ? "mine-row" : isDrafted ? "drafted-row" : "";
+  const name = displayName(rookie.name);
 
   return (
     <>
@@ -32,16 +37,16 @@ export default function RookieRow({
             <PositionBadge group={rookie.group} pos={rookie.pos} />
             <div className="stack" style={{ gap: 1 }}>
               <span className="row" style={{ gap: 6 }}>
-                <span className="pname" style={{ cursor: "pointer" }} onClick={onToggle}>
-                  {displayName(rookie.name)}
-                  {overrides[rookie.id] && <span className="tag gold" style={{ marginLeft: 6 }}>edited</span>}
+                <span className="pname" style={{ cursor: "pointer" }} onClick={() => onToggle(rookie.id)}>
+                  {name}
+                  {hasOverride && <span className="tag gold" style={{ marginLeft: 6 }}>edited</span>}
                 </span>
                 <a
                   className="ai-link"
                   href={aiSearchUrl(playerSearchQuery(rookie))}
                   target="_blank"
                   rel="noreferrer noopener"
-                  title={`Quick AI search: ${displayName(rookie.name)}`}
+                  title={`Quick AI search: ${name}`}
                   onClick={(e) => e.stopPropagation()}
                 >
                   ✨
@@ -69,9 +74,9 @@ export default function RookieRow({
           {isDrafted ? (
             <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
               <span className="tag" title="drafted">
-                {takenBy === OTHER ? "taken" : franchiseName(league, takenBy).split(" ")[0]}
+                {takenBy === OTHER ? "taken" : franchiseAbbrev(league, takenBy)}
               </span>
-              <button className="btn ghost sm" onClick={() => undraft(rookie.id)}>
+              <button className="btn ghost sm" aria-label={`Undo ${name}'s pick`} onClick={() => undraft(rookie.id)}>
                 undo
               </button>
             </div>
@@ -81,14 +86,17 @@ export default function RookieRow({
                 <button
                   className="btn primary sm"
                   title="Draft to my team"
+                  aria-label={`Draft ${name} to my team`}
                   onClick={() => markDrafted(rookie.id, myFranchiseId)}
                 >
                   Mine
                 </button>
               )}
-              <button className="btn sm" title="Taken by another team" onClick={() => markDrafted(rookie.id)}>
-                Taken
-              </button>
+              <FranchisePicker
+                league={league}
+                ariaLabel={`Mark ${name} taken by franchise`}
+                onPick={(franchiseId) => markDrafted(rookie.id, franchiseId)}
+              />
             </div>
           )}
         </td>
@@ -104,10 +112,13 @@ export default function RookieRow({
   );
 }
 
+export default memo(RookieRow);
+
 function RookieDetail({ rookie, scoring }: { rookie: RankedRookie; scoring: Scoring }) {
-  const { overrides, setOverride } = useDraftStore();
+  const overrideStats = useDraftStore((s) => s.overrides[rookie.id]);
+  const setOverride = useDraftStore((s) => s.setOverride);
   const stats = (GROUP_STATS[rookie.group] ?? []) as StatKey[];
-  const hasOverride = !!overrides[rookie.id];
+  const hasOverride = !!overrideStats;
   const breakdown = pointsBreakdown(rookie, scoring);
 
   // local buffer so users can type freely (decimals, partial input)
@@ -123,15 +134,23 @@ function RookieDetail({ rookie, scoring }: { rookie: RankedRookie; scoring: Scor
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rookie.id, hasOverride]);
 
+  // Debounce the store commit so the board (and every row subscribed to it) doesn't
+  // recompute on every keystroke — only ~200ms after the user pauses typing.
+  const commitTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(commitTimer.current), []);
+
   const commit = (k: StatKey, raw: string) => {
     const nextDraft = { ...draft, [k]: raw };
     setDraft(nextDraft);
-    const next: StatLine = {};
-    for (const sk of stats) {
-      const num = parseFloat(nextDraft[sk]);
-      if (!Number.isNaN(num)) next[sk] = num;
-    }
-    setOverride(rookie.id, next);
+    clearTimeout(commitTimer.current);
+    commitTimer.current = setTimeout(() => {
+      const next: StatLine = {};
+      for (const sk of stats) {
+        const num = parseFloat(nextDraft[sk]);
+        if (!Number.isNaN(num)) next[sk] = num;
+      }
+      setOverride(rookie.id, next);
+    }, 200);
   };
 
   const hasFcContext = rookie.fcOverallRank != null || rookie.fcPosRank != null;

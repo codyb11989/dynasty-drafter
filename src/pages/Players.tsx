@@ -1,22 +1,31 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useDraftStore } from "../store/draftStore";
-import { useBoard } from "../hooks/useBoard";
+import { useBoardCtx } from "../context/BoardContext";
 import { ALL_GROUPS, GROUP_LABEL } from "../lib/value";
 import { displayName } from "../lib/format";
+import { sortRows, SORT_DEFAULT_DIR, type SortKey } from "../lib/tableSort";
 import type { PosGroup } from "../types";
 import RookieRow from "../components/RookieRow";
+import SortableTh from "../components/SortableTh";
 
 type Filter = "ALL" | PosGroup;
-type Sort = "value" | "proj" | "vor" | "adp";
 
 export default function Players() {
-  const { board } = useBoard();
-  const { draftedBy } = useDraftStore();
+  const { board } = useBoardCtx();
+  const draftedBy = useDraftStore((s) => s.draftedBy);
   const [filter, setFilter] = useState<Filter>("ALL");
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<Sort>("value");
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "value", dir: -1 });
   const [hideDrafted, setHideDrafted] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedId((cur) => (cur === id ? null : id));
+  }, []);
+
+  const toggleSort = useCallback((key: SortKey) => {
+    setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: SORT_DEFAULT_DIR[key] }));
+  }, []);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -26,12 +35,7 @@ export default function Players() {
       if (q && !displayName(r.name).toLowerCase().includes(q) && !r.team.toLowerCase().includes(q)) return false;
       return true;
     });
-    const dir = sort === "adp" ? 1 : -1; // adp: lower is better
-    return [...filtered].sort((a, b) => {
-      const av = sort === "adp" ? (a.adp ?? 9999) : (a[sort] as number);
-      const bv = sort === "adp" ? (b.adp ?? 9999) : (b[sort] as number);
-      return (av - bv) * dir;
-    });
+    return sortRows(filtered, sort.key, sort.dir);
   }, [board, filter, query, sort, hideDrafted, draftedBy]);
 
   return (
@@ -52,15 +56,6 @@ export default function Players() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <label className="row faint" style={{ fontSize: 13, gap: 6 }}>
-            sort
-            <select className="select" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-              <option value="value">Value</option>
-              <option value="proj">Proj pts</option>
-              <option value="vor">VOR</option>
-              <option value="adp">ADP</option>
-            </select>
-          </label>
           <label className="row faint" style={{ fontSize: 13, gap: 6 }}>
             <input type="checkbox" checked={hideDrafted} onChange={(e) => setHideDrafted(e.target.checked)} />
             hide drafted
@@ -83,23 +78,18 @@ export default function Players() {
           <table className="table">
             <thead>
               <tr>
-                <th className="rank">#</th>
+                <SortableTh label="#" sortKey="rank" active={sort.key === "rank"} dir={sort.dir} onClick={toggleSort} className="rank" />
                 <th>Player</th>
-                <th className="num">Proj</th>
-                <th className="num">VOR</th>
-                <th className="num">ADP</th>
-                <th>Value</th>
+                <SortableTh label="Proj" sortKey="proj" active={sort.key === "proj"} dir={sort.dir} onClick={toggleSort} className="num" />
+                <SortableTh label="VOR" sortKey="vor" active={sort.key === "vor"} dir={sort.dir} onClick={toggleSort} className="num" />
+                <SortableTh label="ADP" sortKey="adp" active={sort.key === "adp"} dir={sort.dir} onClick={toggleSort} className="num" />
+                <SortableTh label="Value" sortKey="value" active={sort.key === "value"} dir={sort.dir} onClick={toggleSort} />
                 <th className="num"></th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <RookieRow
-                  key={r.id}
-                  rookie={r}
-                  expanded={expandedId === r.id}
-                  onToggle={() => setExpandedId((id) => (id === r.id ? null : r.id))}
-                />
+                <RookieRow key={r.id} rookie={r} expanded={expandedId === r.id} onToggle={toggleExpanded} />
               ))}
             </tbody>
           </table>

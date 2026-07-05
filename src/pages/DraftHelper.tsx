@@ -1,34 +1,56 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useAppData } from "../App";
 import { useDraftStore } from "../store/draftStore";
-import { useBoard } from "../hooks/useBoard";
+import { useBoardCtx } from "../context/BoardContext";
 import { ALL_GROUPS, GROUP_LABEL } from "../lib/value";
 import { displayName } from "../lib/format";
+import { currentPickTracker } from "../lib/pickTracker";
+import { sortRows, SORT_DEFAULT_DIR, type SortKey } from "../lib/tableSort";
 import type { PosGroup } from "../types";
 import RookieRow from "../components/RookieRow";
+import SortableTh from "../components/SortableTh";
 import SuggestPanel from "../components/SuggestPanel";
 import NeedsPanel from "../components/NeedsPanel";
 
 type Filter = "ALL" | PosGroup;
 
 export default function DraftHelper() {
-  const { board, available } = useBoard();
-  const { pickOrder, undoLast, draftedBy } = useDraftStore();
+  const { league } = useAppData();
+  const { board, available } = useBoardCtx();
+  const pickOrder = useDraftStore((s) => s.pickOrder);
+  const undoLast = useDraftStore((s) => s.undoLast);
+  const draftedBy = useDraftStore((s) => s.draftedBy);
+  const myFranchiseId = useDraftStore((s) => s.myFranchiseId);
   const [filter, setFilter] = useState<Filter>("ALL");
   const [query, setQuery] = useState("");
   const [hideDrafted, setHideDrafted] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "rank", dir: 1 });
+
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedId((cur) => (cur === id ? null : id));
+  }, []);
+
+  const toggleSort = useCallback((key: SortKey) => {
+    setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: SORT_DEFAULT_DIR[key] }));
+  }, []);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return board.filter((r) => {
+    const filtered = board.filter((r) => {
       if (hideDrafted && draftedBy[r.id]) return false;
       if (filter !== "ALL" && r.group !== filter) return false;
       if (q && !displayName(r.name).toLowerCase().includes(q) && !r.team.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [board, filter, query, hideDrafted, draftedBy]);
+    return sortRows(filtered, sort.key, sort.dir);
+  }, [board, filter, query, hideDrafted, draftedBy, sort]);
 
   const lastPick = pickOrder[pickOrder.length - 1];
+  const tracker = useMemo(
+    () => currentPickTracker(pickOrder, league, myFranchiseId),
+    [pickOrder, league, myFranchiseId],
+  );
 
   return (
     <div>
@@ -37,13 +59,29 @@ export default function DraftHelper() {
           <h1>Draft Helper</h1>
           <p>
             {available.length} rookies available · {pickOrder.length} drafted. Tap{" "}
-            <strong>Mine</strong> or <strong>Taken</strong> as picks come in — the board and suggestion
+            <strong>Mine</strong> or pick a franchise as picks come in — the board and suggestion
             recalibrate instantly.
           </p>
         </div>
         <button className="btn" disabled={!lastPick} onClick={undoLast} title="Undo the last pick marked">
           ↶ Undo last
         </button>
+      </div>
+
+      <div className="card row spread wrap" style={{ marginBottom: 14, padding: "10px 16px" }}>
+        <div className="row" style={{ gap: 10 }}>
+          <span className="tag gold">
+            Round {tracker.round} · Pick {tracker.pickInRound}
+          </span>
+          <span className="faint" style={{ fontSize: 12 }}>#{tracker.overall} overall</span>
+        </div>
+        {myFranchiseId && tracker.picksUntilMine != null && (
+          <span style={{ fontSize: 13 }} className={tracker.picksUntilMine === 0 ? "val" : "muted"}>
+            {tracker.picksUntilMine === 0
+              ? "You're on the clock!"
+              : `${tracker.picksUntilMine} pick${tracker.picksUntilMine === 1 ? "" : "s"} until you're up`}
+          </span>
+        )}
       </div>
 
       <div className="draft-grid">
@@ -77,23 +115,18 @@ export default function DraftHelper() {
             <table className="table">
               <thead>
                 <tr>
-                  <th className="rank">#</th>
+                  <SortableTh label="#" sortKey="rank" active={sort.key === "rank"} dir={sort.dir} onClick={toggleSort} className="rank" />
                   <th>Player</th>
-                  <th className="num">Proj</th>
-                  <th className="num hide-mobile">VOR</th>
-                  <th className="num hide-mobile">ADP</th>
-                  <th>Value</th>
+                  <SortableTh label="Proj" sortKey="proj" active={sort.key === "proj"} dir={sort.dir} onClick={toggleSort} className="num" />
+                  <SortableTh label="VOR" sortKey="vor" active={sort.key === "vor"} dir={sort.dir} onClick={toggleSort} className="num hide-mobile" />
+                  <SortableTh label="ADP" sortKey="adp" active={sort.key === "adp"} dir={sort.dir} onClick={toggleSort} className="num hide-mobile" />
+                  <SortableTh label="Value" sortKey="value" active={sort.key === "value"} dir={sort.dir} onClick={toggleSort} />
                   <th className="num"></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <RookieRow
-                    key={r.id}
-                    rookie={r}
-                    expanded={expandedId === r.id}
-                    onToggle={() => setExpandedId((id) => (id === r.id ? null : r.id))}
-                  />
+                  <RookieRow key={r.id} rookie={r} expanded={expandedId === r.id} onToggle={toggleExpanded} />
                 ))}
                 {rows.length === 0 && (
                   <tr>

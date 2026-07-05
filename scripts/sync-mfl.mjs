@@ -137,6 +137,18 @@ function normalizeRosters(rosters) {
   return out;
 }
 
+// The full MFL player universe (~20k+ entries) is mostly irrelevant to this app —
+// only rostered players and rookies are ever looked up (roster displays, roster-need
+// counts, the rookie board). Filtering trims players.json by 70-90%.
+function filterPlayerMapForExport(playerMap, rosters) {
+  const rosteredIds = new Set(Object.values(rosters).flat());
+  const out = {};
+  for (const [id, p] of Object.entries(playerMap)) {
+    if (p.rookie || rosteredIds.has(id)) out[id] = p;
+  }
+  return out;
+}
+
 function normalizePlayers(players) {
   const map = {};
   const rookies = [];
@@ -270,12 +282,16 @@ async function main() {
   const pvCount = Object.keys(playerValues.players).length;
   console.log(`  PlayerValues: ${pvCount} rostered players matched to FC`);
 
+  // Trim players.json to just rosters + rookies before writing.
+  const playersForExport = filterPlayerMapForExport(playerMap, rosters);
+  console.log(`  players.json filtered: ${Object.keys(playerMap).length} → ${Object.keys(playersForExport).length}`);
+
   // Write everything.
   await Promise.all([
     writeJson("league.json", league),
     writeJson("scoring.json", scoring),
     writeJson("rosters.json", rosters),
-    writeJson("players.json", playerMap),
+    writeJson("players.json", playersForExport),
     writeJson("adp.json", adp),
     writeJson("rookies.json", rookiePool),
     writeJson("playerValues.json", playerValues),

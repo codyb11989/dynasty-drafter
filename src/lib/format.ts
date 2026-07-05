@@ -14,6 +14,13 @@ export function franchiseName(league: League, id: string | null): string {
   return league.franchises.find((f) => f.id === id)?.name ?? id;
 }
 
+export function franchiseAbbrev(league: League, id: string | null): string {
+  if (!id) return "—";
+  const f = league.franchises.find((f) => f.id === id);
+  if (!f) return id;
+  return f.abbrev || f.name.split(" ")[0];
+}
+
 export const GROUP_COLOR: Record<PosGroup, string> = {
   QB: "var(--pos-qb)",
   RB: "var(--pos-rb)",
