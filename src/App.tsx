@@ -159,6 +159,14 @@ function SyncPill({
   error: string | null;
   onSync: () => void;
 }) {
+  // Re-render each minute so the "synced Xm ago" label doesn't freeze during a
+  // long draft session.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
   const label =
     status === "syncing"
       ? "syncing…"

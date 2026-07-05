@@ -24,6 +24,17 @@ interface DraftState {
   setOverride: (id: string, stats: StatLine | null) => void;
   setWeights: (w: { modelWeight?: number; needWeight?: number }) => void;
   resetDraft: () => void;
+  /** Restore a backup exported from Settings (replaces current state). */
+  importState: (s: DraftBackup) => void;
+}
+
+export interface DraftBackup {
+  draftedBy: Record<string, string>;
+  pickOrder: string[];
+  myFranchiseId: string | null;
+  overrides: Record<string, StatLine>;
+  modelWeight?: number;
+  needWeight?: number;
 }
 
 export const useDraftStore = create<DraftState>()(
@@ -75,6 +86,16 @@ export const useDraftStore = create<DraftState>()(
         })),
 
       resetDraft: () => set({ draftedBy: {}, pickOrder: [] }),
+
+      importState: (b) =>
+        set((s) => ({
+          draftedBy: b.draftedBy,
+          pickOrder: b.pickOrder,
+          myFranchiseId: b.myFranchiseId,
+          overrides: b.overrides,
+          modelWeight: b.modelWeight ?? s.modelWeight,
+          needWeight: b.needWeight ?? s.needWeight,
+        })),
     }),
     { name: "dd-draft-v1" },
   ),

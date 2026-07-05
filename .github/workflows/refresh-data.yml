@@ -13,8 +13,10 @@ jobs:
   refresh:
     # Reuse the full sync → build → deploy-to-Pages pipeline.
     uses: ./.github/workflows/deploy.yml
-    # Pages deployment needs these granted to the calling job.
+    # Pages deployment needs these granted to the calling job. contents: write
+    # lets the pipeline's "Commit refreshed data" step push the fresh
+    # public/data/ snapshot back to main.
     permissions:
-      contents: read
+      contents: write
       pages: write
       id-token: write

@@ -1,16 +1,80 @@
+import { useState } from "react";
 import { useAppData, useSync } from "../App";
-import { OTHER, useDraftStore } from "../store/draftStore";
+import { OTHER, useDraftStore, type DraftBackup } from "../store/draftStore";
 import { buildDetailCsv, buildMflImportCsv, downloadFile } from "../lib/exportDraft";
 import { DEFAULT_SETTINGS } from "../lib/value";
 
 export default function Settings() {
   const { league, meta, rookies } = useAppData();
   const { refresh, status, error: syncError } = useSync();
-  const { myFranchiseId, setMyTeam, modelWeight, needWeight, setWeights, resetDraft, draftedBy, pickOrder } =
-    useDraftStore();
+  const {
+    myFranchiseId,
+    setMyTeam,
+    modelWeight,
+    needWeight,
+    setWeights,
+    resetDraft,
+    draftedBy,
+    pickOrder,
+    overrides,
+    importState,
+  } = useDraftStore();
   const draftedCount = Object.keys(draftedBy).length;
   const knownPickCount = pickOrder.filter((id) => draftedBy[id] && draftedBy[id] !== OTHER).length;
   const unknownPickCount = pickOrder.length - knownPickCount;
+
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [backupMsg, setBackupMsg] = useState<string | null>(null);
+
+  const exportBackup = async () => {
+    const payload = JSON.stringify({
+      app: "dynasty-drafter",
+      v: 1,
+      savedAt: new Date().toISOString(),
+      draftedBy,
+      pickOrder,
+      myFranchiseId,
+      overrides,
+      modelWeight,
+      needWeight,
+    });
+    try {
+      await navigator.clipboard.writeText(payload);
+      setBackupMsg("Backup copied to clipboard ✓ — paste it somewhere safe (notes, chat).");
+    } catch {
+      // Clipboard can be unavailable (permissions, http) — download instead.
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
+      a.download = `draft-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      setBackupMsg("Backup downloaded ✓");
+    }
+  };
+
+  const applyImport = () => {
+    try {
+      const d = JSON.parse(importText);
+      if (!d || typeof d !== "object" || typeof d.draftedBy !== "object" || d.draftedBy == null) {
+        throw new Error("that doesn't look like a draft backup");
+      }
+      const backup: DraftBackup = {
+        draftedBy: d.draftedBy,
+        pickOrder: Array.isArray(d.pickOrder) ? d.pickOrder : Object.keys(d.draftedBy),
+        myFranchiseId: typeof d.myFranchiseId === "string" ? d.myFranchiseId : null,
+        overrides: d.overrides && typeof d.overrides === "object" ? d.overrides : {},
+        modelWeight: typeof d.modelWeight === "number" ? d.modelWeight : undefined,
+        needWeight: typeof d.needWeight === "number" ? d.needWeight : undefined,
+      };
+      importState(backup);
+      setShowImport(false);
+      setImportText("");
+      setBackupMsg(`Restored ${Object.keys(backup.draftedBy).length} drafted players ✓`);
+    } catch (e) {
+      setBackupMsg(`Restore failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
   const syncing = status === "syncing";
   const syncMsg =
     status === "updated"
@@ -68,8 +132,8 @@ export default function Settings() {
             onChange={(e) => setWeights({ modelWeight: Number(e.target.value) })}
           />
           <p className="faint" style={{ fontSize: 12, marginTop: 2 }}>
-            Higher = trust your scoring-based projections more (surfaces IDP value). Lower = lean on
-            consensus rookie ADP (offense-only).
+            Higher = trust your scoring-based projections more. Lower = lean on market consensus
+            (rookie-draft ADP incl. IDP, plus FantasyCalc for offense).
           </p>
 
           <div className="row spread" style={{ fontSize: 13, marginTop: 12 }}>
@@ -133,17 +197,46 @@ export default function Settings() {
           <h3 style={{ fontSize: 15, marginBottom: 10 }}>Draft state</h3>
           <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
             {draftedCount} player{draftedCount === 1 ? "" : "s"} currently marked as drafted. Your picks,
-            edits, and settings are saved in this browser.
+            edits, and settings are saved in this browser — back them up if you might switch devices
+            mid-draft.
           </p>
-          <button
-            className="btn danger sm"
-            onClick={() => {
-              if (confirm("Clear all drafted players and start the draft over? (Keeps your team & tuning.)"))
-                resetDraft();
-            }}
-          >
-            Reset draft board
-          </button>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <button className="btn sm" onClick={exportBackup}>
+              ⇪ Back up
+            </button>
+            <button className="btn sm" onClick={() => setShowImport((v) => !v)}>
+              ⇩ Restore
+            </button>
+            <button
+              className="btn danger sm"
+              onClick={() => {
+                if (confirm("Clear all drafted players and start the draft over? (Keeps your team & tuning.)"))
+                  resetDraft();
+              }}
+            >
+              Reset draft board
+            </button>
+          </div>
+          {showImport && (
+            <div className="stack" style={{ gap: 8, marginTop: 10 }}>
+              <textarea
+                className="input"
+                rows={4}
+                placeholder="Paste a backup here…"
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                style={{ width: "100%", fontFamily: "monospace", fontSize: 12 }}
+              />
+              <button className="btn primary sm" onClick={applyImport} disabled={!importText.trim()}>
+                Restore backup
+              </button>
+            </div>
+          )}
+          {backupMsg && (
+            <p className="faint" style={{ fontSize: 12, marginTop: 8 }}>
+              {backupMsg}
+            </p>
+          )}
         </div>
 
         <div className="card">
