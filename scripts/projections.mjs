@@ -44,11 +44,12 @@ export function capitalTier(draftRound, draftPick) {
   const r = Number(draftRound) || 0;
   const p = Number(draftPick) || 0;
   if (!r) return 5; // undrafted / unknown
-  const overall = (r - 1) * 32 + (p || 16);
-  if (overall <= 12) return 0;
-  if (overall <= 32) return 1;
-  if (overall <= 64) return 2;
-  if (overall <= 105) return 3;
+  // Tier straight from the round: compensatory picks stretch rounds 3+ past a
+  // synthesized 32-picks-per-round "overall", which used to spill late round-3
+  // picks into the day-3 tier.
+  if (r === 1) return p && p <= 12 ? 0 : 1;
+  if (r === 2) return 2;
+  if (r === 3) return 3;
   return 4;
 }
 

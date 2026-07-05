@@ -105,10 +105,13 @@ export default function RookieRow({
 }
 
 function RookieDetail({ rookie, scoring }: { rookie: RankedRookie; scoring: Scoring }) {
+  const { rookies } = useAppData();
   const { overrides, setOverride } = useDraftStore();
   const stats = (GROUP_STATS[rookie.group] ?? []) as StatKey[];
   const hasOverride = !!overrides[rookie.id];
   const breakdown = pointsBreakdown(rookie, scoring);
+  // Untuned model stats — `rookie.stats` already has any override applied.
+  const modelStats = rookies.find((r) => r.id === rookie.id)?.stats ?? {};
 
   // local buffer so users can type freely (decimals, partial input)
   const [draft, setDraft] = useState<Record<string, string>>(() => seed());
@@ -131,7 +134,12 @@ function RookieDetail({ rookie, scoring }: { rookie: RankedRookie; scoring: Scor
       const num = parseFloat(nextDraft[sk]);
       if (!Number.isNaN(num)) next[sk] = num;
     }
-    setOverride(rookie.id, next);
+    // If the edited values equal the model's, clear the override instead of
+    // storing a no-op copy that flags the player "edited" forever.
+    const matchesModel = (Object.entries(next) as [StatKey, number][]).every(
+      ([sk, v]) => v === (modelStats[sk] ?? 0),
+    );
+    setOverride(rookie.id, matchesModel ? null : next);
   };
 
   return (

@@ -11,6 +11,7 @@
 // ---------------------------------------------------------------------------
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectRookie, POS_GROUP } from "./projections.mjs";
@@ -40,7 +41,11 @@ async function fetchType(type, extraParams = {}) {
     : { TYPE: type, L: LEAGUE_ID, JSON: "1" };
   const params = new URLSearchParams({ ...base, ...extraParams });
   const url = `https://${host}/${YEAR}/export?${params}`;
-  const cacheFile = join(CACHE_DIR, `${type}.json`);
+  // Cache key covers the full URL (league, year, params), not just the type:
+  // batched player-detail calls must not clobber the full-list cache, and a
+  // league/year change must never fall back to another league's data.
+  const urlHash = createHash("sha1").update(url).digest("hex").slice(0, 10);
+  const cacheFile = join(CACHE_DIR, `${type}-${urlHash}.json`);
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -283,9 +288,12 @@ async function fetchRookieDetails(ids) {
 }
 
 async function fetchAdp() {
-  // Keeper/dynasty ADP — for a rookie draft the relevant entries are rookies.
-  // PERIOD=ALL gives the broadest sample (RECENT is often empty this early).
-  return fetchType("adp", { PERIOD: "ALL", IS_KEEPER: "K", IS_PPR: "-1" });
+  // Rookie-only draft ADP (IS_KEEPER=R): drawn from actual rookie drafts, so it
+  // covers far more of the pool than the keeper feed (~140 rookies vs ~26) and —
+  // crucially for this league — includes IDP players. Pick numbers map directly
+  // onto rookie-draft slots. PERIOD=ALL gives the broadest sample (RECENT is
+  // often empty this early).
+  return fetchType("adp", { PERIOD: "ALL", IS_KEEPER: "R", IS_PPR: "-1" });
 }
 function normalizeAdpSource(d) {
   return d; // already in {adp:{player:[...]}} shape

@@ -229,6 +229,7 @@ export function suggestPicks(
     const reasons: string[] = [];
     reasons.push(`${ordinal(r.posRank)} ${GROUP_LABEL[r.group]} on the board`);
     if (r.adp != null) reasons.push(`market ADP ${r.adp.toFixed(1)}`);
+    else if (r.fcValue != null) reasons.push(`FantasyCalc ${r.fcValue.toFixed(0)}/100`);
     if (myCounts && need[r.group] > 0.5) reasons.push(`fills a ${GROUP_LABEL[r.group]} need`);
     if (r.vor > 0) reasons.push(`+${r.vor.toFixed(0)} pts over replacement`);
     return { rookie: r, score: Math.round(score * 10) / 10, reasons };

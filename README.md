@@ -46,10 +46,11 @@ that's what surfaces IDP value that offense-only rankings miss.
 3. **VOR (value over replacement)** — points above a replacement-level rookie at
    that position, using your real starting lineup. This is the positional-scarcity
    adjustment (e.g. why an elite tackle LB is worth a high pick in this league).
-4. **Market blend** — combined with consensus rookie **ADP** where it exists.
-   Note ADP only covers offense (most dynasty leagues aren't IDP), so the
-   **Model ↔ Market** slider in Settings lets you decide how much to trust each.
-   Roster-need weighting for suggestions is adjustable there too.
+4. **Market blend** — combined with market signals where they exist: MFL
+   **rookie-draft ADP** (from actual rookie-only drafts, so it covers IDP too)
+   and **FantasyCalc** dynasty values (offense only). The **Model ↔ Market**
+   slider in Settings lets you decide how much to trust each. Roster-need
+   weighting for suggestions is adjustable there too.
 
 ## Updating data
 
@@ -92,6 +93,8 @@ src/
 
 - Projections are a **baseline** — landing spot and depth chart matter more than
   draft slot, which is why ADP is blended in and every player is hand-tunable.
-- Rookie ADP is offense-only; lean on the model (and your own reads) for IDP.
+- Rookie-draft ADP covers roughly half the pool (including IDP); FantasyCalc is
+  offense-only. Players with no market data rank on the model alone.
 - Draft state lives in your browser's `localStorage`. Use the same
-  browser/profile at the draft, and don't clear site data mid-draft.
+  browser/profile at the draft, and don't clear site data mid-draft — or use
+  **Back up / Restore** in Settings to move state between devices.
