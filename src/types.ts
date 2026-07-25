@@ -58,6 +58,24 @@ export type StatKey =
   | "pd"
   | "defTD";
 
+/**
+ * A player's entry in MFL's live injury report.
+ *
+ * `severity` is derived from `status` only — never from `expReturn`, whose
+ * offseason dates are unreliable (a torn ACL is routinely paired with a return
+ * date days away). "major" means the player is not expected to play at all
+ * (RETIRED / IR / Out / Suspended); "minor" is mostly the blanket offseason
+ * "Questionable" that carries little signal.
+ */
+export interface Injury {
+  status: string; // raw MFL status, e.g. "IR", "Out", "RETIRED", "Questionable"
+  details: string | null; // e.g. "Knee - ACL"
+  expReturn: string | null; // display only — unreliable in the offseason
+  severity: "major" | "minor";
+}
+
+export type InjuryMap = Record<string, Injury>; // playerId -> injury
+
 export interface Rookie {
   id: string;
   name: string; // "Last, First"
@@ -73,6 +91,7 @@ export interface Rookie {
   projPointsOverride: number | null;
   adp: number | null;
   adpRank: number | null;
+  injury: Injury | null; // live MFL injury report entry, if any
   fcValue: number | null; // 0-100 FantasyCalc dynasty value (higher = better)
   fcOverallRank: number | null; // FC rank among all dynasty players (1 = best)
   fcPosRank: number | null; // FC rank within position
@@ -110,4 +129,5 @@ export interface Meta {
   year: string;
   leagueId: string;
   rookieCount: number;
+  injuryCount?: number; // absent in snapshots synced before injuries were tracked
 }

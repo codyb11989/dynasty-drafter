@@ -6,6 +6,7 @@ import { aiSearchUrl, displayName, fmtPick, franchiseName, playerSearchQuery } f
 import type { RankedRookie } from "../lib/value";
 import type { Scoring, StatKey, StatLine } from "../types";
 import PositionBadge from "./PositionBadge";
+import InjuryBadge, { injuryTitle } from "./InjuryBadge";
 
 export default function RookieRow({
   rookie,
@@ -35,6 +36,11 @@ export default function RookieRow({
                 <span className="pname" style={{ cursor: "pointer" }} onClick={onToggle}>
                   {displayName(rookie.name)}
                   {overrides[rookie.id] && <span className="tag gold" style={{ marginLeft: 6 }}>edited</span>}
+                  {rookie.injury && (
+                    <span style={{ marginLeft: 6 }}>
+                      <InjuryBadge injury={rookie.injury} />
+                    </span>
+                  )}
                 </span>
                 <a
                   className="ai-link"
@@ -144,6 +150,15 @@ function RookieDetail({ rookie, scoring }: { rookie: RankedRookie; scoring: Scor
   return (
     <div className="row wrap" style={{ alignItems: "flex-start", gap: 24, padding: "6px 4px 10px" }}>
       <div className="detail-breakdown">
+        {rookie.injury && (
+          <div style={{ marginBottom: 10, fontSize: 12 }}>
+            <div className="faint detail-h" style={{ marginBottom: 4 }}>Injury report (MFL)</div>
+            <div className="row" style={{ gap: 8 }}>
+              <InjuryBadge injury={rookie.injury} />
+              <span className="muted">{injuryTitle(rookie.injury)}</span>
+            </div>
+          </div>
+        )}
         <div className="faint detail-h">How {rookie.proj.toFixed(0)} pts are scored</div>
         {breakdown.length === 0 ? (
           <div className="muted" style={{ fontSize: 13 }}>Flat projection (no statline) — e.g. kicker.</div>

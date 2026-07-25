@@ -1,4 +1,14 @@
-import type { AdpMap, League, Meta, PlayerMap, PlayerValues, Rookie, Rosters, Scoring } from "../types";
+import type {
+  AdpMap,
+  InjuryMap,
+  League,
+  Meta,
+  PlayerMap,
+  PlayerValues,
+  Rookie,
+  Rosters,
+  Scoring,
+} from "../types";
 
 export interface AppData {
   league: League;
@@ -8,6 +18,7 @@ export interface AppData {
   adp: AdpMap;
   rookies: Rookie[];
   playerValues: PlayerValues;
+  injuries: InjuryMap;
   meta: Meta;
 }
 
@@ -39,15 +50,19 @@ const EMPTY_PLAYER_VALUES: PlayerValues = { players: {}, dist: {} };
  */
 export async function loadAllData(opts: { bust?: boolean } = {}): Promise<AppData> {
   const { bust } = opts;
-  const [league, scoring, rosters, players, adp, rookies, playerValues, meta] = await Promise.all([
-    getJson<League>("league.json", bust),
-    getJson<Scoring>("scoring.json", bust),
-    getJson<Rosters>("rosters.json", bust),
-    getJson<PlayerMap>("players.json", bust),
-    getJson<AdpMap>("adp.json", bust),
-    getJson<Rookie[]>("rookies.json", bust),
-    getJsonOptional<PlayerValues>("playerValues.json", EMPTY_PLAYER_VALUES, bust),
-    getJson<Meta>("meta.json", bust),
-  ]);
-  return { league, scoring, rosters, players, adp, rookies, playerValues, meta };
+  const [league, scoring, rosters, players, adp, rookies, playerValues, injuries, meta] =
+    await Promise.all([
+      getJson<League>("league.json", bust),
+      getJson<Scoring>("scoring.json", bust),
+      getJson<Rosters>("rosters.json", bust),
+      getJson<PlayerMap>("players.json", bust),
+      getJson<AdpMap>("adp.json", bust),
+      getJson<Rookie[]>("rookies.json", bust),
+      getJsonOptional<PlayerValues>("playerValues.json", EMPTY_PLAYER_VALUES, bust),
+      // Optional: a cached build from before injuries were synced (or an offline
+      // client holding an older precache) simply shows no injury flags.
+      getJsonOptional<InjuryMap>("injuries.json", {}, bust),
+      getJson<Meta>("meta.json", bust),
+    ]);
+  return { league, scoring, rosters, players, adp, rookies, playerValues, injuries, meta };
 }

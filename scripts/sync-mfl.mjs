@@ -28,9 +28,9 @@ const LEAGUE_HOST = process.env.MFL_HOST || "www46.myfantasyleague.com";
 const API_HOST = "api.myfantasyleague.com";
 
 // Some export types must hit the shared api host instead of the league server.
-const API_HOST_TYPES = new Set(["players", "adp"]);
-// ADP is a cross-league report and is rejected if scoped with a league id.
-const GLOBAL_TYPES = new Set(["adp"]);
+const API_HOST_TYPES = new Set(["players", "adp", "injuries"]);
+// ADP and injuries are cross-league reports and are rejected if scoped with a league id.
+const GLOBAL_TYPES = new Set(["adp", "injuries"]);
 
 const USER_AGENT = "dynasty-drafter/0.1 (league hub sync)";
 
@@ -176,6 +176,57 @@ function normalizeAdp(adp) {
   return out;
 }
 
+// ---- Injuries -------------------------------------------------------------
+// MFL's injury report is a live, cross-league feed. Note the signal/noise split:
+// the great majority of offseason entries are a blanket "Questionable" with an
+// `exp_return` placeholder a week out, which carries almost no information. The
+// statuses that actually change a draft-day decision are the ones that mean the
+// player will not play: RETIRED, IR (and variants), Out, Suspended.
+//
+// `exp_return` dates are unreliable in the offseason (players are listed with a
+// torn ACL *and* a return date a few days away), so we keep the date for display
+// but never derive severity from it — severity comes from `status` alone.
+const MAJOR_STATUSES = new Set([
+  "RETIRED",
+  "IR",
+  "IR-PUP",
+  "IR-NFI",
+  "PUP",
+  "OUT",
+  "SUSPENDED",
+  "DOUBTFUL",
+]);
+
+function injurySeverity(status) {
+  return MAJOR_STATUSES.has(String(status).toUpperCase()) ? "major" : "minor";
+}
+
+function normalizeInjuries(raw) {
+  const out = {};
+  for (const i of asArray(raw?.injuries?.injury)) {
+    if (!i.id) continue;
+    const status = t(i.status) || "Unknown";
+    out[i.id] = {
+      status,
+      details: t(i.details) || null,
+      expReturn: t(i.exp_return) || null,
+      severity: injurySeverity(status),
+    };
+  }
+  return out;
+}
+
+// Non-fatal: an injury-feed outage must never fail the sync or block a draft-day
+// build. Falls back to the on-disk cache, then to "no injury data".
+async function fetchInjuries() {
+  try {
+    return normalizeInjuries(await fetchType("injuries"));
+  } catch (err) {
+    console.warn(`  ! Injuries fetch failed: ${err.message} — continuing without injury data`);
+    return {};
+  }
+}
+
 // ---- Main -----------------------------------------------------------------
 async function main() {
   await mkdir(DATA_DIR, { recursive: true });
@@ -197,11 +248,13 @@ async function main() {
 
   console.log(`  franchises: ${league.franchiseCount}, players: ${Object.keys(playerMap).length}, rookies: ${rookieIds.length}`);
 
-  // Fetch draft capital for rookies (DETAILS=1, batched), MFL ADP, and FantasyCalc values.
-  const [details, adp, fcRaw] = await Promise.all([
+  // Fetch draft capital for rookies (DETAILS=1, batched), MFL ADP, FantasyCalc
+  // values, and the live injury report.
+  const [details, adp, fcRaw, injuries] = await Promise.all([
     fetchRookieDetails(rookieIds),
     normalizeAdp(normalizeAdpSource(await fetchAdp())),
     fetchFantasyCalcValues(),
+    fetchInjuries(),
   ]);
 
   const fcByMflId = buildFcByMflId(fcRaw);
@@ -235,6 +288,7 @@ async function main() {
         projPointsOverride: proj.projPointsOverride ?? null,
         adp: a ? a.avgPick : null,
         adpRank: a ? a.rank : null,
+        injury: injuries[id] ?? null,
         fcValue: null, // filled below
         fcOverallRank: null,
         fcPosRank: null,
@@ -270,6 +324,20 @@ async function main() {
   const fcCount = rookiePool.filter((r) => r.fcValue != null).length;
   console.log(`  FantasyCalc: matched ${fcCount}/${rookiePool.length} rookies (max raw value ${maxFcValue})`);
 
+  // Call out draft-pool players who will not play — these are the ones worth
+  // seeing in the terminal before the draft, not the "Questionable" bulk.
+  const flagged = rookiePool.filter((r) => r.injury);
+  const major = flagged
+    .filter((r) => r.injury.severity === "major")
+    .sort((a, b) => (a.adp ?? Infinity) - (b.adp ?? Infinity));
+  console.log(
+    `  Injuries: ${Object.keys(injuries).length} league-wide, ${flagged.length} in the rookie pool (${major.length} major)`,
+  );
+  for (const r of major) {
+    const adpStr = r.adp != null ? `ADP ${r.adp.toFixed(2)}` : "undrafted";
+    console.log(`    ⚠ ${r.injury.status.padEnd(9)} ${r.name} (${r.pos}, ${adpStr}) — ${r.injury.details ?? "no detail"}`);
+  }
+
   // Build player values for existing (non-rookie) rostered players.
   const playerValues = buildPlayerValues(fcRaw, rosters, playerMap);
   const pvCount = Object.keys(playerValues.players).length;
@@ -284,11 +352,15 @@ async function main() {
     writeJson("adp.json", adp),
     writeJson("rookies.json", rookiePool),
     writeJson("playerValues.json", playerValues),
+    // Full league-wide map (rookies *and* veterans) so roster views can flag
+    // injured players too — the rookie board reads the copy inlined above.
+    writeJson("injuries.json", injuries),
     writeJson("meta.json", {
       syncedAt: new Date().toISOString(),
       year: YEAR,
       leagueId: LEAGUE_ID,
       rookieCount: rookiePool.length,
+      injuryCount: Object.keys(injuries).length,
     }),
   ]);
 

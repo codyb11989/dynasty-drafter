@@ -5,6 +5,7 @@ import { useBoard } from "../hooks/useBoard";
 import { suggestPicks } from "../lib/value";
 import { displayName, fmtPick } from "../lib/format";
 import PositionBadge from "./PositionBadge";
+import InjuryBadge from "./InjuryBadge";
 
 export default function SuggestPanel({ onPick }: { onPick?: (id: string) => void }) {
   const { league } = useAppData();
@@ -47,6 +48,7 @@ export default function SuggestPanel({ onPick }: { onPick?: (id: string) => void
           <div className="row">
             <PositionBadge group={top.group} pos={top.pos} />
             <span className="big">{displayName(top.name)}</span>
+            {top.injury && <InjuryBadge injury={top.injury} />}
           </div>
           <span className="val" style={{ fontSize: 18 }}>
             {top.proj.toFixed(0)}
@@ -71,6 +73,7 @@ export default function SuggestPanel({ onPick }: { onPick?: (id: string) => void
               <div className="row" style={{ gap: 7 }}>
                 <PositionBadge group={s.rookie.group} pos={s.rookie.pos} />
                 <strong>{displayName(s.rookie.name)}</strong>
+                {s.rookie.injury && <InjuryBadge injury={s.rookie.injury} />}
                 <span className="faint">{fmtPick(s.rookie.draftRound, s.rookie.draftPick)}</span>
               </div>
               <div className="reasons">{s.reasons.slice(0, 2).join(" · ")}</div>

@@ -55,6 +55,7 @@ function rookie(partial: Partial<Rookie>): Rookie {
     projPointsOverride: null,
     adp: null,
     adpRank: null,
+    injury: null,
     fcValue: null,
     fcOverallRank: null,
     fcPosRank: null,
